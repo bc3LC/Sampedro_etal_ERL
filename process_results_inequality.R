@@ -259,12 +259,18 @@ fen.dec <- bind_rows(fen.bld.dec, fen.trn.dec) %>%
   pivot_longer(cols = c("diff_Gini25", "diff_Gini50"),
                names_to = "scenario",
                values_to = "value") %>%
+  left_join_error_no_match(read.csv("data/map_GCAM_reg.csv"), by = join_by(region)) %>%
+  group_by(scenario, region_agg, year, decile, sector) %>%
+  summarise(value = sum(value)) %>%
+  ungroup() %>%
+  rename(region = region_agg) %>%
   mutate(scenario = gsub("diff_", "", scenario),
          region = gsub("_", " ", region),
          region = if_else(grepl("Caribbean", region), "CAC", region),
          region = if_else(grepl("Trade", region), "EFTA", region)) %>%
   filter(year <= 2050,
-         year > 2015)
+         year > 2015) 
+
 
 ggplot(fen.dec %>% filter(year == 2050), aes(x = region, y = value, fill = factor(decile, levels = c("d1", "d2", "d3", "d4", "d5",
                                                                           "d6", "d7", "d8", "d9", "d10")) )) +
@@ -285,8 +291,43 @@ ggsave(paste0(here::here(), "/figures/Fen_dec_sce_sct_2050.tiff"),last_plot(), "
 
 # 1.2 Renewable energy and CDR  ----
 
+en <- getQuery(prj, "primary energy consumption by region (avg fossil efficiency)") %>%
+  filter(fuel != "regional biomass") %>%
+  mutate(scenario = if_else(grepl("Gini25", scenario), "Gini25", scenario),
+         scenario = if_else(grepl("Gini50", scenario), "Gini50", scenario),
+         scenario = if_else(grepl("RegGHGPol_Ineq", scenario), "Baseline", scenario)) %>%
+  pivot_wider(names_from = "scenario",
+              values_from = "value") %>%
+  mutate(diff_Gini25 = Gini25 - Baseline,
+         diff_Gini50 = Gini50 - Baseline) %>%
+  select(year, region, fuel, Units, starts_with("diff")) %>%
+  pivot_longer(cols = c("diff_Gini25", "diff_Gini50"),
+               names_to = "scenario",
+               values_to = "value") %>%
+  mutate(scenario = gsub("diff_", "", scenario)) %>%
+  filter(year <= 2050,
+         year > 2015)
 
+techs = c("a oil","b natural gas","c coal",
+          "d biomass","e nuclear","f hydro","g wind","h solar","i geothermal",
+          "j traditional biomass","H2 industrial")
 
+my_pal_energy = jgcricolors::jgcricol()$pal_all
+
+ggplot(en %>% filter(year == 2050), aes(x = region, y = value, fill = fuel)) +
+  geom_col() +
+  facet_grid( ~ scenario) + 
+  theme_bw() + 
+  labs(x = "", y = "kcal/yr") + 
+  theme(legend.position = "right",
+        legend.title = element_blank(),
+        strip.text = element_text(size = 10),
+        axis.text.x = element_text(size = 7, angle = 90, hjust = 1, vjust = .5),
+        axis.text.y = element_text(size = 11),
+        axis.title.y = element_text(size = 12)) + 
+  scale_fill_manual(values = my_pal_energy[names(my_pal_energy) %in% techs]) 
+
+ggsave(paste0(here::here(), "/figures/Food_sce_dec_Check.tiff"),last_plot(), "tiff")
 
 # ---
 
@@ -405,7 +446,12 @@ pop <- getQuery(prj, "Population by region") %>%
   select(-value, -Units) %>%
   mutate(scenario = if_else(grepl("Gini25", scenario), "Gini25", scenario),
          scenario = if_else(grepl("Gini50", scenario), "Gini50", scenario),
-         scenario = if_else(grepl("RegGHGPol_Ineq", scenario), "Baseline", scenario)) 
+         scenario = if_else(grepl("RegGHGPol_Ineq", scenario), "Baseline", scenario)) %>%
+  left_join_error_no_match(read.csv("data/map_GCAM_reg.csv"), by = join_by(region)) %>%
+  group_by(scenario, region_agg, decile, year) %>%
+  summarise(pop = sum(pop)) %>%
+  ungroup() %>%
+  rename(region = region_agg)
 
 food_pc <- getQuery(prj, "food demand") %>%
   separate(`gcam-consumer`, c("adj", "decile")) %>%
@@ -415,9 +461,14 @@ food_pc <- getQuery(prj, "food demand") %>%
   mutate(scenario = if_else(grepl("Gini25", scenario), "Gini25", scenario),
          scenario = if_else(grepl("Gini50", scenario), "Gini50", scenario),
          scenario = if_else(grepl("RegGHGPol_Ineq", scenario), "Baseline", scenario))  %>%
+  left_join_error_no_match(read.csv("data/map_GCAM_reg.csv"), by = join_by(region)) %>%
+  group_by(scenario, region_agg, decile, demand, year, Units) %>%
+  summarise(value = sum(value)) %>%
+  ungroup() %>%
+  rename(region = region_agg) %>%
   left_join_error_no_match(pop, by = join_by(year, region, decile, scenario)) %>%
-  mutate(value = value * 1000000000000 / pop,
-         Units = "kcal") %>%
+  mutate(value = value * 1000000000000 / pop /365,
+         Units = "kcal/day") %>%
   pivot_wider(names_from = "scenario",
               values_from = "value") %>%
   mutate(diff_Gini25 = Gini25 - Baseline,
@@ -439,7 +490,7 @@ ggplot(food_pc %>% filter(year == 2050), aes(x = region, y = value, fill = facto
   geom_col() +
   facet_grid(demand ~ scenario) + 
   theme_bw() + 
-  labs(x = "", y = "kcal/yr") + 
+  labs(x = "", y = "kcal/pc/day") + 
   theme(legend.position = "right",
         legend.title = element_blank(),
         strip.text = element_text(size = 10),
