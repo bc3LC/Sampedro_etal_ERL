@@ -12,8 +12,12 @@ library(rmap)
 library(here)
 library(countrycode)
 
-# ======================================================
-# 0 - COMPARE GINIs
+# SECTION 0:  SCENARIO FEATURES ----
+
+#---
+# 0.1 - Compare Ginis for a selected suite of countries ----
+# TODO Add Gini MinHIst (minimum Gini in the time series)
+
 ginis <- read.csv(paste0(here::here(), "/data/Compare Ginis.csv")) %>%
   mutate(iso = toupper(iso)) %>%
   mutate(continent = countrycode::countrycode(sourcevar = iso, origin = "iso3c", destination = "continent")) %>%
@@ -46,8 +50,8 @@ ggplot(ginis %>% filter(iso %in% selected_countries), aes(x = as.numeric(year), 
 
 ggsave(paste0(here::here(), "/figures/ginis_sce_selectedISO_year.tiff"),last_plot(), device = "tiff")
 
-
-# Compare income shares
+#---
+# 0.2 - Compare income shares for a subset of representative regions ----
 gcam_regions <- read.csv(paste0(here::here(), "/data/GCAM_region_names.csv"))
 
 selected_gcam_regions <- c("Africa_Eastern", "Brazil", "Australia_NZ", "Canada", "China", "EU-15",
@@ -85,8 +89,8 @@ ggplot(shares %>%   filter(region %in% selected_gcam_regions, year == 2050),
 
 ggsave(paste0(here::here(), "/figures/IncShares_sce_selectedGCAMReg_2050.tiff"),last_plot(), "tiff")
 
-
-# Poverty
+#---
+# 0.3: Check how the Gini reduction erradicate poverty and extreme poverty  ----
 pov <- read.csv(paste0(here::here(), "/data/poverty.csv")) %>%
   filter(!grepl("MinHist", sce)) %>%
   rename(scenario = sce) %>%
@@ -126,34 +130,33 @@ map_pov_2050 <- map_povx$map_param_FIXED +
         legend.text = element_text(size = 8))
 
 ggsave(paste0(here::here(), "/figures/Poverty_GCAMReg_2050.tiff"),last_plot(), "tiff")
-#======================================================
+
 # =====================================================
 # RESULTS PROCESSING
  
-# --------
-# Load rgcam project
-# --------
-
-# --------
+## First, load the rgcam project
 prj <- loadProject("Paper_inequality_new.dat")
 listScenarios(prj)
 QUERY_LIST <- listQueries(prj)
 
+# Select some pollutants (for emissions) and scenarios
 sel_gas<-c("BC","OC","HFCs","NOx","SO2","CO2")
-
 sel_sce <- c("RegGHGPol_Gini25_Ineq", "RegGHGPol_Gini50_Ineq", "RegGHGPol_Ineq")
 
-#Palettes
+#Create some palletes
 my_pal<-c("gray20","gray50","#ad440c","#ef8e27","#d01c2a","darkorchid3","#507fab","deepskyblue1","#11d081", "#00931d")
 my_pal_energy<-c("#00931d","gray20","thistle2","gold2","deepskyblue1","peachpuff2","#d01c2a","#11d081")
 my_pal_scen<-c("darkorchid3","forestgreen")
 my_pal_ssp<-c("forestgreen","dodgerblue3","darkgoldenrod3","firebrick3","black")
 
 
-# =======================================================================
+#---
 
-# 1A- FINAL ENERGY DEMAND
+# 1 - ENERGY SYSTEM ----
 
+# 1.1 Final energy demand (FEN) ----
+
+# First, calculate the region-level changes in energy demand by sector 
 fen.bld <- getQuery(prj,"building final energy by service and fuel") %>%
   mutate(sector = if_else(grepl("comm", sector), "Commercial Buildings", sector),
          sector = if_else(grepl("resid heating", sector), "Residential heating", sector),
@@ -218,7 +221,8 @@ ggplot(fen, aes(x = year, y = value, fill = factor(sector, levels = c("Commercia
 
 ggsave(paste0(here::here(), "/figures/Fen_global_sce_sct.tiff"),last_plot(), "tiff")
 
-# Add deciles
+# ---
+# Then add deciles to assess "within-region effects"
 fen.bld.dec <- getQuery(prj,"building final energy by service and fuel") %>%
   filter(grepl("resid", sector)) %>%
   mutate(sector = sub("_([^_]*)$", "_split_\\1", sector)) %>%
@@ -279,9 +283,16 @@ ggplot(fen.dec %>% filter(year == 2050), aes(x = region, y = value, fill = facto
 
 ggsave(paste0(here::here(), "/figures/Fen_dec_sce_sct_2050.tiff"),last_plot(), "tiff")
 
+# 1.2 Renewable energy and CDR  ----
 
-# 1B- FOOD DEMAND
 
+
+
+# ---
+
+# 2 - FOOD DEMAND  ----
+
+# 2.1 Regional changes in food consumption ----
 food <- getQuery(prj, "food demand") %>%
   separate(`gcam-consumer`, c("adj", "decile")) %>%
   separate(input, c("adj2", "demand")) %>%
@@ -301,7 +312,6 @@ food <- getQuery(prj, "food demand") %>%
   mutate(scenario = gsub("diff_", "", scenario)) %>%
   filter(year <= 2050,
          year > 2015)
-
 
 
 food.map <- food %>%
@@ -330,7 +340,63 @@ map_food_2050 <- map_food$map_param_KMEANS +
 
 ggsave(paste0(here::here(), "/figures/Food_map_diffSce_2050.tiff"),map_food_2050, "tiff")
 
-# Add food pc
+#---
+# Calculate changes by food group
+food.sub <- getQuery(prj, "food consumption by type (specific)") %>%
+  mutate(subsector = if_else(grepl("Animal", `subsector...4`), "Animal protein", subsector...3),
+         subsector = if_else(grepl("Plant", `subsector...4`), "Plant protein", subsector),
+         subsector = if_else(grepl("FiberCrop", `subsector...4`), "Other crops", subsector),
+         subsector = if_else(grepl("MiscCrop", `subsector...4`), "Other crops", subsector),
+         subsector = if_else(grepl("OtherGrain", `subsector...4`), "Other crops", subsector),
+         subsector = if_else(grepl("Root", `subsector...4`), "Other crops", subsector),
+         subsector = if_else(grepl("Sugar", `subsector...4`), "Other crops", subsector),
+         subsector = if_else(grepl("Oil", `subsector...4`), "Other crops", subsector),) %>%
+  group_by(scenario, region, subsector, year, Units) %>%
+  summarise(value = sum(value)) %>%
+  ungroup() %>%
+  filter(year <= 2050,
+         year > 2015) %>%
+  mutate(scenario = if_else(grepl("Gini25", scenario), "Gini25", scenario),
+         scenario = if_else(grepl("Gini50", scenario), "Gini50", scenario),
+         scenario = if_else(grepl("RegGHGPol_Ineq", scenario), "Baseline", scenario)) %>%
+  pivot_wider(names_from = "scenario",
+              values_from = "value") %>%
+  mutate(diff_Gini25 = Gini25 - Baseline,
+         diff_Gini50 = Gini50 - Baseline) %>%
+  select(year, region, subsector, Units, starts_with("diff")) %>%
+  pivot_longer(cols = c("diff_Gini25", "diff_Gini50"),
+               names_to = "scenario",
+               values_to = "value") %>%
+  mutate(scenario = gsub("diff_", "", scenario))
+
+food.sub.map <- food.sub %>%
+  rename(sce = scenario) %>%
+  group_by(sce, subRegion = region, year, subsector, Units) %>%
+  summarise(value = sum(value)) %>%
+  ungroup()
+
+map_food.sub <- rmap::map(data = food.sub.map %>% filter(year == 2050),
+                      shape = mapGCAMReg32,
+                      folder ="figures/maps/foodSubsector",
+                      legendType = "kmeans",
+                      palette = "pal_div_BrGn",
+                      row = "sce",
+                      col = "subsector",
+                      #legendType = "continuous",
+                      background  = T)
+
+map_food_sub_2050 <- map_food.sub$map_param_KMEANS +
+  theme(strip.text.y = element_text(size = 6),
+        strip.text.x = element_text(size = 6),
+        plot.title = element_blank(),
+        legend.position = "bottom",
+        legend.text = element_text(size = 6),
+        legend.title = element_text(size = 7))  +
+  theme(legend.key.size = unit(0.4, "cm"))
+
+ggsave(paste0(here::here(), "/figures/FoodSub_map_diffSce_2050.tiff"),map_food_sub_2050, "tiff")
+
+# 2.2 Within-region changes in calorie consumption ----
 pop <- getQuery(prj, "Population by region") %>%
   mutate(value = value * 1E3) %>%
   as_tibble() %>%
@@ -383,11 +449,15 @@ ggplot(food_pc %>% filter(year == 2050), aes(x = region, y = value, fill = facto
   scale_fill_manual(values = my_pal)
 
 ggsave(paste0(here::here(), "/figures/Food_sce_dec_Check.tiff"),last_plot(), "tiff")
-# =======================================================================
 
-# 2- DEMAND INEQUALITIES
+# 2.3 Changes in nutrition ----
 
-# --------
+
+
+
+# 3 - DEMAND INEQUALITIES ----
+
+# ---
 # HOUSEHOLD ENERGY
 hh.energy <- getQuery(prj, "building final energy by service and fuel") %>%
   filter(scenario %in% sel_sce) %>%
@@ -408,7 +478,7 @@ hh.energy <- getQuery(prj, "building final energy by service and fuel") %>%
   mutate(palma = d10 / (d1 + d2 + d3 + d4)) %>%
   select(scenario, region, sector, year, palma)
 
-# --------
+# ---
 # TRN ENERGY
 trn.energy <- getQuery(prj, "transport service output by tech") %>%
   filter(scenario %in% sel_sce) %>%
@@ -427,7 +497,7 @@ trn.energy <- getQuery(prj, "transport service output by tech") %>%
   mutate(palma = d10 / (d1 + d2 + d3 + d4)) %>%
   select(scenario, region, sector, year, palma)
   
-# --------
+# ---
 # FOOD
  food <- getQuery(prj, "food demand") %>%
   filter(scenario %in% sel_sce) %>%
@@ -446,9 +516,8 @@ trn.energy <- getQuery(prj, "transport service output by tech") %>%
   mutate(palma = d10 / (d1 + d2 + d3 + d4)) %>%
   select(scenario, region, sector, year, palma)
 
-# --------
-# Figure (TODO: Add food -> non-staple food consumption (kcal))
-
+ # ---
+# Figure
 demand_ineq <- bind_rows(hh.energy, trn.energy, food) %>%
   dplyr::rename(subRegion = region,
                 value = palma,
@@ -491,8 +560,7 @@ ggsave(paste0(here::here(), "/figures/map_2030.tiff"), map_2030, "tiff")
 ggsave(paste0(here::here(), "/figures/map_2050.tiff"), map_2050, "tiff")
 
 
-# =======================================================================
-# 3-CARBON PRICE
+# 4 - CLIMATE CHANGE MITIGATION: CARBON PICES -----
 c.price <- getQuery(prj, "CO2 prices") %>%
   filter(!grepl("FUG", market),
          !grepl("LUC", market),
@@ -528,7 +596,7 @@ ggplot(c.price %>%
   ggtitle("Regional carbon tax")
 ggsave(paste0(here::here(), "/figures/Reg_CPrice.tiff"),last_plot(), "tiff")
 
-#------
+#---
 
 diff.c.price <- c.price %>%
   # adjust region names to rmap names
@@ -638,7 +706,7 @@ ggsave(paste0(here::here(), "/figures/map_Cprice_2050.tiff"), map_Cprice_2050, "
 ggsave(paste0(here::here(), "/figures/map_Cprice_perc_2050.tiff"), map_Cprice_perc_2050, "tiff")
 
 # =======================================================================
-# 3-EMISSIONS
+# Check emission increases with CPrices ----
 
 # Load project with emissions
 prj_em <- loadProject("Paper_inequality_emissions.dat")
@@ -728,7 +796,3 @@ ggplot(ghg_gas %>% filter(region %in% c("Africa_Eastern", "Africa_Northern", "In
   scale_color_manual(values = c("orange", "dodgerblue1", "forestgreen"))
 
 
-
-
-
-# =======================================================================
