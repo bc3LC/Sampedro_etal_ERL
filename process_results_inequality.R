@@ -634,6 +634,149 @@ ggsave(paste0(here::here(), "/figures/Food_sce_dec_Check.tiff"),last_plot(), "ti
 
 # 2.3 Changes in nutrition ----
 
+#---
+# Load data
+mder <- read.csv(paste0("data/MDER.csv")) %>%
+  rename(mder_units = unit) %>%
+  mutate(mder_units = 'kcal/capita/day')
+colnames(mder) = c('variable','mder_units','mder','std','min','max')
+ssp_data <- read.csv(paste0("data/SSP2_population_by_demographic.csv"), skip = 1)
+iso_gcam_regions <- read.csv(paste0("data/iso_GCAM_regID.csv"), skip = 6)
+regions_key <- left_join(read.csv("data/map_GCAM_reg.csv"), iso_gcam_regions, by = "GCAM_region_ID") %>%
+  dplyr::select(country_name, GCAM_region_ID, region = region_agg)
+
+
+#---
+# Calculate population weight by sex and age
+ssp_data_clean <- iso_gcam_regions %>%
+  dplyr::select(-region_GCAM3, -GCAM_region_ID) %>%
+  dplyr::left_join(ssp_data %>%
+                     dplyr::filter(SCENARIO == 'SSP2_v9_130115'),
+                   by = "iso", multiple = 'all') %>%
+  dplyr::select(-MODEL, -REGION) %>%
+  dplyr::rename(scenario = SCENARIO,
+                variable = VARIABLE,
+                unit = UNIT)
+# Remove X from year columns
+colnames(ssp_data_clean) <- gsub("X", "", colnames(ssp_data_clean))
+
+ssp_data_long <- ssp_data_clean %>%
+  tidyr::pivot_longer(cols = 6:24, names_to = "year", values_to = "value") %>%
+  mutate(value = value * 1e6,
+         unit = "total population") %>%
+  mutate(year = as.integer(year))
+# Isolate reference (total) population
+reference_pop <- ssp_data_long %>%
+  dplyr::filter(variable == "Population") %>%
+  dplyr::rename(total_pop = value) %>%
+  dplyr::select(iso, year, total_pop)
+# Join and calculate demographic shares of population
+ssp_data_final <- ssp_data_long %>%
+  # Remove total male and total female pop, we want by age/sex
+  dplyr::filter(!variable %in% c("Population|Male", "Population|Female", "Population", NA)) %>%
+  dplyr::left_join(reference_pop, by = c("iso", "year")) %>%
+  dplyr::mutate(demo_share = value / total_pop) %>%
+  dplyr::rename(sub_pop = value)  %>%
+  dplyr::rename(pop_units = unit)
+
+# Get population by sex and age
+# Population weighting
+total_regional_pop <- ssp_data_final %>%
+  dplyr::select(-scenario,-iso) %>%
+  # get GCAM regions instead of country names
+  dplyr::left_join(regions_key, by = "country_name") %>%
+  # get total population by country
+  dplyr::group_by(year, country_name, region) %>%
+  # isolate total population by region
+  dplyr::distinct(total_pop) %>%
+  dplyr::group_by(year, region) %>%
+  # sum for total regional population
+  dplyr::mutate(total_regional_pop = sum(total_pop)) %>%
+  dplyr::ungroup()
+
+weighted_pop <- ssp_data_final %>%
+  dplyr::select(-scenario) %>%
+  # get GCAM regions instead of country names
+  dplyr::left_join(regions_key, by = "country_name") %>%
+  # get total regional population
+  dplyr::left_join(total_regional_pop) %>%
+  # weight each country by its population over total regional pop
+  dplyr::group_by(country_name, year) %>%
+  dplyr::mutate(weight = total_pop / total_regional_pop) %>% 
+  dplyr::distinct() %>%
+  # get GCAM population
+  dplyr::left_join(pop, by = c("region", "year"), relationship = "many-to-many") %>%
+  # compute GCAM population by sex and age for each country
+  dplyr::mutate(weighted_demographics = demo_share * weight * pop)
+
+weighted_pop_sex_age <- weighted_pop %>%
+  select(-pop_units, -sub_pop, -total_pop, -demo_share, -weight) %>%
+  group_by(scenario, variable, year, region, decile) %>%
+  # sum the weighted averages for each country into GCAM regions
+  summarize(pop_sex_age = sum(weighted_demographics))
+
+
+#---
+# Calculate average dietary energy supply adecuacy (ADESA)
+# > 100 ok, < 100 not ok
+
+# join with MDER data, calculate caloric requirements by sex and age
+adesa_denominator <- weighted_pop_sex_age %>%
+  left_join(mder, by = "variable") %>%
+  select(-std) %>%
+  group_by(scenario, variable, year, region, decile) %>%
+  # compute a range because of differing physical activity levels
+  summarize(cal_req_x_pop = mder * pop_sex_age,
+            min_cal_req_x_pop = min * pop_sex_age,
+            max_cal_req_x_pop = max * pop_sex_age) %>%
+  # aggregate caloric requirements to get total regional values
+  group_by(scenario, region, year, decile) %>%
+  summarize(denominator_sum = sum(cal_req_x_pop),
+            min_denominator_sum = sum(min_cal_req_x_pop),
+            max_denominator_sum = sum(max_cal_req_x_pop)) %>%
+  mutate(year = as.numeric(year)) %>% 
+  # update scenario names, filter years, and rename regions
+  mutate(scenario = if_else(grepl("Gini25", scenario), "Gini25", scenario),
+         scenario = if_else(grepl("Gini50", scenario), "Gini50", scenario),
+         scenario = if_else(grepl("RegGHGPol_Ineq", scenario), "Baseline", scenario)) %>% 
+  filter(year <= 2050,
+         year > 2015) %>% 
+  mutate(region = gsub("_", " ", region),
+         region = if_else(grepl("Caribbean", region), "CAC", region),
+         region = if_else(grepl("Trade", region), "EFTA", region))
+
+  
+# add in regional calorie info, calculate ADESA
+food_pc_withPop <- getQuery(prj, "food demand") %>%
+  separate(`gcam-consumer`, c("adj", "decile")) %>%
+  separate(input, c("adj2", "demand")) %>%
+  mutate(decile = gsub("Group", "d", decile)) %>%
+  select(scenario, region, year, decile, demand, value, Units) %>%
+  mutate(scenario = if_else(grepl("Gini25", scenario), "Gini25", scenario),
+         scenario = if_else(grepl("Gini50", scenario), "Gini50", scenario),
+         scenario = if_else(grepl("RegGHGPol_Ineq", scenario), "Baseline", scenario))  %>%
+  left_join_error_no_match(read.csv("data/map_GCAM_reg.csv"), by = join_by(region)) %>%
+  group_by(scenario, region_agg, decile, year, Units) %>%
+  summarise(value = sum(value)) %>%
+  ungroup() %>%
+  rename(region = region_agg) %>%
+  left_join_error_no_match(pop, by = join_by(year, region, decile, scenario)) %>%
+  mutate(value = value * 1e12 / pop /365,
+         Units = "kcal/day") %>%
+  filter(year <= 2050,
+         year > 2015) %>%
+  mutate(region = gsub("_", " ", region),
+         region = if_else(grepl("Caribbean", region), "CAC", region),
+         region = if_else(grepl("Trade", region), "EFTA", region))
+
+adesa <- left_join(adesa_denominator, food_pc_withPop,
+                   by = c('scenario','region','year','decile')) %>%
+  dplyr::group_by(year, region, scenario, decile) %>%
+  dplyr::reframe(adesa = (value / denominator_sum) * pop * 100, # convert to unitless and percentage
+                 min_adesa = (value / min_denominator_sum) * pop * 100,
+                 max_adesa = (value / max_denominator_sum) * pop * 100,
+                 .groups = "keep") %>%
+  dplyr::ungroup()
 
 
 
