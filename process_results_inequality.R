@@ -794,6 +794,21 @@ adesa <- left_join(adesa_denominator, food_pc_withPop,
                  .groups = "keep") %>%
   dplyr::ungroup()
 
+ggplot(adesa %>% 
+         filter(year == 2050,
+                decile %in% c("d1", "d2", "d3")), 
+       aes(x = adesa, y = region, fill = scenario, color = scenario)) + 
+
+  geom_bar(stat = "identity", position = "dodge") + 
+  facet_grid(~ decile) + 
+  labs(x = "ADESA", y = "") + 
+  theme_bw() + 
+  theme(legend.position = "bottom",
+        legend.title = element_blank()) + 
+  scale_fill_manual(values = c("orange", "dodgerblue1", "forestgreen")) +
+  geom_vline(xintercept = 100, color = "black", linetype = "dashed", size = 1)
+
+ggsave(paste0(here::here(), "/figures/ADESA_2050.tiff"), last_plot(), "tiff")
 
 
 # 3 - DEMAND INEQUALITIES ----
