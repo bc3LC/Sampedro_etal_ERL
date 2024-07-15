@@ -13,32 +13,45 @@ library(here)
 library(countrycode)
 
 # SECTION 0:  SCENARIO FEATURES ----
+selected_gcam_regions <- c("Africa_Southern", "Brazil", "Australia_NZ", "Canada", "China", "EU-15",
+                           "India", "Japan", "Middle East", "Russia", "South Africa", "USA")
 
 #---
 # 0.1 - Compare Ginis for a selected suite of countries ----
 # TODO Add Gini MinHIst (minimum Gini in the time series)
+
+gini_minHist <- read.csv(paste0(here::here(), "/data/Gini_MinHist.csv")) %>%
+  mutate(iso = toupper(iso)) %>%
+  select(iso, gini_MinHist = GiniMinHist) %>%
+  mutate(gini_MinHist = as.numeric(gini_MinHist)) %>%
+  filter(complete.cases(.)) %>%
+  mutate(continent = countrycode::countrycode(sourcevar = iso, origin = "iso3c", destination = "continent")) %>%
+  mutate(country.name = countrycode::countrycode(sourcevar = iso, origin = "iso3c", destination = "country.name"))
 
 ginis <- read.csv(paste0(here::here(), "/data/Compare Ginis.csv")) %>%
   mutate(iso = toupper(iso)) %>%
   mutate(continent = countrycode::countrycode(sourcevar = iso, origin = "iso3c", destination = "continent")) %>%
   mutate(country.name = countrycode::countrycode(sourcevar = iso, origin = "iso3c", destination = "country.name")) %>%
   select(!contains("scal"), Gini_2015) %>%
-  rename(SSP2_Ineq = Narayan_etal_2023) %>%
-  pivot_longer(cols = c("SSP2_Ineq", "Gini25", "Gini50"),
+  rename(Baseline = Narayan_etal_2023) %>%
+  pivot_longer(cols = c("Baseline", "Gini25", "Gini50"),
                names_to = "scenario",
-               values_to = "gini")
+               values_to = "gini") 
+
+
 
 
 # Select a representative subset of countries
-selected_countries <- c("ETH", "MAR", "ZAF", "BRA", "USA", "ARG", "CHN", "IND", "JPN", "SAU",
+selected_countries <- c("NGA", "ZAF", "USA", "CHN", "IND", "JPN",
                         "DEU", "ESP", "SWE", "AUS", "RUS", "IDN")
 
 
-ggplot(ginis %>% filter(iso %in% selected_countries), aes(x = as.numeric(year), y = gini, color = factor(scenario, levels = c("SSP2_Ineq", "Gini25", "Gini50")))) +
+ggplot(ginis %>% filter(iso %in% selected_countries), aes(x = as.numeric(year), y = gini, color = factor(scenario, levels = c("Baseline", "Gini25", "Gini50")))) +
   geom_line() + 
   facet_wrap(~country.name) + 
+  geom_hline(data = gini_minHist %>% filter(iso %in% selected_countries), aes(yintercept = gini_MinHist), colour = "firebrick2", linetype = "dashed")  +
   theme_bw() + 
-  labs(x = "", y = "Gini") + 
+  labs(x = "", y = "Gini") +
   theme(legend.position = "bottom",
         legend.title = element_blank(),
         strip.text = element_text(size = 10),
@@ -46,7 +59,8 @@ ggplot(ginis %>% filter(iso %in% selected_countries), aes(x = as.numeric(year), 
         axis.text.x = element_text(size = 10),
         axis.text.y = element_text(size = 10),
         axis.title.y = element_text(size = 12)) + 
-  scale_color_manual(values = c("orange", "dodgerblue1", "forestgreen"))
+  scale_color_manual(values = c("orange", "dodgerblue1", "forestgreen")) 
+
 
 ggsave(paste0(here::here(), "/figures/ginis_sce_selectedISO_year.tiff"),last_plot(), device = "tiff")
 
@@ -54,7 +68,7 @@ ggsave(paste0(here::here(), "/figures/ginis_sce_selectedISO_year.tiff"),last_plo
 # 0.2 - Compare income shares for a subset of representative regions ----
 gcam_regions <- read.csv(paste0(here::here(), "/data/GCAM_region_names.csv"))
 
-selected_gcam_regions <- c("Africa_Eastern", "Brazil", "Australia_NZ", "Canada", "China", "EU-15",
+selected_gcam_regions <- c("Africa_Southern", "Brazil", "Australia_NZ", "Canada", "China", "EU-15",
                           "India", "Japan", "Middle East", "Russia", "South Africa", "USA")
 
 
@@ -68,9 +82,11 @@ shares <- tibble::as_tibble(bind_rows(
   filter(sce == "SSP2") %>%
   left_join(gcam_regions, by = join_by(GCAM_region_ID)) %>%
   filter(complete.cases(.)) %>%
-  filter(region %in% selected_gcam_regions)
+  filter(region %in% selected_gcam_regions) 
 
-ggplot(shares %>%   filter(region %in% selected_gcam_regions, year == 2050), 
+ggplot(shares %>%   
+         filter(region %in% selected_gcam_regions, year == 2050) %>% 
+         mutate(region = gsub("_", " ", region)), 
        aes(x = factor(category, levels = c("d1", "d2", "d3", "d4", "d5",
                                            "d6", "d7", "d8", "d9", "d10")),
            y = shares, color = factor(model, levels = c("Baseline", "Gini25", "Gini50")))) +
@@ -82,7 +98,7 @@ ggplot(shares %>%   filter(region %in% selected_gcam_regions, year == 2050),
         legend.title = element_blank(),
         strip.text = element_text(size = 10),
         legend.text = element_text(size = 11),
-        axis.text.x = element_text(size = 8),
+        axis.text.x = element_text(size = 7),
         axis.text.y = element_text(size = 10),
         axis.title.y = element_text(size = 12)) + 
   scale_color_manual(values = c("orange","dodgerblue1", "forestgreen"))
@@ -742,7 +758,8 @@ ggsave(paste0(here::here(), "/figures/map_2030.tiff"), map_2030, "tiff")
 ggsave(paste0(here::here(), "/figures/map_2050.tiff"), map_2050, "tiff")
 
 
-# 4 - CLIMATE CHANGE MITIGATION: CARBON PICES -----
+# 4 - CLIMATE CHANGE MITIGATION: CARBON PRICES -----
+# Carbon Prices ----
 c.price <- getQuery(prj, "CO2 prices") %>%
   filter(!grepl("FUG", market),
          !grepl("LUC", market),
@@ -776,7 +793,7 @@ ggplot(c.price %>%
         plot.title = element_text(size = 18, hjust = .5)) + 
   scale_color_manual(values = c("orange", "dodgerblue1", "forestgreen")) + 
   ggtitle("Regional carbon tax")
-ggsave(paste0(here::here(), "/figures/Reg_CPrice.tiff"),last_plot(), "tiff")
+#ggsave(paste0(here::here(), "/figures/Reg_CPrice.tiff"),last_plot(), "tiff")
 
 #---
 
@@ -868,7 +885,7 @@ map_cPrice_perc2050<- rmap::map(data = map.diff.c.price_perc,
                          animate = T)
 
 map_Cprice_2050 <- map_crpiceX$map_param_PRETTY +
-  ggtitle("A)") + 
+  #ggtitle("A)") + 
   theme(strip.text.y = element_text(size = 10),
         plot.title = element_text(size = 14),
         legend.position = "bottom",
@@ -876,7 +893,7 @@ map_Cprice_2050 <- map_crpiceX$map_param_PRETTY +
         legend.title = element_text(size = 10))
 
 map_Cprice_perc_2050 <- map_cPrice_perc2050$map_param_KMEANS +
-  ggtitle("B)") + 
+  #ggtitle("B)") + 
   theme(strip.text.y = element_text(size = 10),
         plot.title = element_text(size = 14),
         legend.position = "bottom",
@@ -886,6 +903,58 @@ map_Cprice_perc_2050 <- map_cPrice_perc2050$map_param_KMEANS +
 
 ggsave(paste0(here::here(), "/figures/map_Cprice_2050.tiff"), map_Cprice_2050, "tiff")
 ggsave(paste0(here::here(), "/figures/map_Cprice_perc_2050.tiff"), map_Cprice_perc_2050, "tiff")
+
+# GHG emissions ----
+GWP <- read.csv("data/ghg_GWP.csv") %>%
+  rename(ghg = GHG_gases)
+
+
+co2 <- getQuery(prj, "CO2 emissions by sector (no bio) (excluding resource production)") %>%
+  group_by(scenario, region, year) %>%
+  summarise(value = sum(value)) %>%
+  ungroup %>%
+  mutate(ghg = "CO2",
+         unit = "MTC")
+
+luc <- getQuery(prj, "LUC emissions by region")%>%
+  group_by(scenario, region, year) %>%
+  summarise(value = sum(value)) %>%
+  ungroup %>%
+  mutate(ghg = "CO2LUC",
+         unit = "MTC") %>%
+  filter(year %in% unique(co2$year))
+
+ghg_total <- getQuery(prj, "nonCO2 emissions by region") %>%
+  rename(unit = Units) %>%
+  bind_rows(luc) %>%
+  bind_rows(co2) %>%
+  filter(year >= 2015) %>%
+  left_join(GWP, by = c("ghg")) %>%
+  mutate(value = value * GWP,
+         Units = "MtCO2e") %>%
+  group_by(scenario, year, Units) %>%
+  summarise(value = sum(value, na.rm = T)) %>%
+  ungroup() %>%
+  filter(year >= 2015,
+         year <= 2050) %>%
+  mutate(scenario = if_else(grepl("Gini25", scenario), "Gini25", scenario),
+         scenario = if_else(grepl("Gini50", scenario), "Gini50", scenario),
+         scenario = if_else(grepl("RegGHGPol", scenario), "Baseline", scenario),
+         value = value / 1000,
+         UNits = "GtCO2e")
+
+ggplot(ghg_total, aes(x = year, y = value, colour = scenario)) + 
+  geom_line() + 
+  theme_bw() + 
+  labs(x = "", y = "GtCO2e") + 
+  scale_color_manual(values = c("orange","dodgerblue1", "forestgreen")) + 
+  theme(legend.title = element_blank(),
+        legend.text = element_text(size = 12),
+        axis.text = element_text(size = 12),
+        axis.title = element_text(size = 13))
+
+ggsave(paste0(here::here(), "/figures/glob_ghg_em.tiff"), last_plot(), "tiff")
+
 
 # =======================================================================
 # Check emission increases with CPrices ----
