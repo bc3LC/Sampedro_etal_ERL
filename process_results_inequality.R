@@ -253,22 +253,36 @@ fen.bld.dec <- getQuery(prj,"building final energy by service and fuel") %>%
   mutate(sector = if_else(grepl("resid heating", sector), "Residential heating", sector),
          sector = if_else(grepl("resid cooling", sector), "Residential cooling", sector),
          sector = if_else(grepl("resid other", sector), "Residential non-thermal services", sector)) %>%
-  group_by(scenario, region, decile, year, Units) %>%
+  group_by(scenario, region, sector, decile, year, Units) %>%
   summarise(value = sum(value)) %>%
-  ungroup() %>%
-  mutate(sector = "Residential buidlings") 
+  ungroup() 
 
 fen.trn.dec <- getQuery(prj,"transport final energy by mode and fuel" ) %>%
   filter(grepl("trn_pass", sector) | grepl("trn_aviation", sector)) %>%
   mutate(sector = sub("_([^_]*)$", "_split_\\1", sector)) %>%
   tidyr::separate(sector, into = c("sector", "decile"), sep = "_split_", extra = "merge", fill = "right") %>%
   mutate(sector = if_else(grepl("trn_aviation", sector), "International Aviation (pass)", sector),
-         sector = if_else(grepl("trn_pass_", sector), "Passenger transport", sector)) %>%
-  group_by(scenario, region, decile, year, Units) %>%
+         sector = if_else(grepl("trn_pass", sector), "Passenger transport", sector)) %>%
+  group_by(scenario, region, sector, decile, year, Units) %>%
+  summarise(value = sum(value)) %>%
+  ungroup()
+
+
+pop.en <- getQuery(prj, "Population by region") %>%
+  mutate(value = value * 1E3) %>%
+  as_tibble() %>%
+  select(-Units) %>%
+  mutate(scenario = if_else(grepl("Gini25", scenario), "Gini25", scenario),
+         scenario = if_else(grepl("Gini50", scenario), "Gini50", scenario),
+         scenario = if_else(grepl("RegGHGPol_Ineq", scenario), "Baseline", scenario)) %>%
+  left_join_error_no_match(read.csv("data/map_GCAM_reg.csv"), by = join_by(region)) %>%
+  group_by(scenario, region_agg, year) %>%
   summarise(value = sum(value)) %>%
   ungroup() %>%
-  mutate(sector = "Passenger transport") 
+  rename(region = region_agg,
+         pop = value)
 
+conv_ej_gj <- 1E9
 
 fen.dec <- bind_rows(fen.bld.dec, fen.trn.dec) %>%
   mutate(scenario = if_else(grepl("Gini25", scenario), "Gini25", scenario),
@@ -287,26 +301,36 @@ fen.dec <- bind_rows(fen.bld.dec, fen.trn.dec) %>%
   summarise(value = sum(value)) %>%
   ungroup() %>%
   rename(region = region_agg) %>%
-  mutate(scenario = gsub("diff_", "", scenario),
-         region = gsub("_", " ", region),
-         region = if_else(grepl("Caribbean", region), "CAC", region),
-         region = if_else(grepl("Trade", region), "EFTA", region)) %>%
+  mutate(scenario = gsub("diff_", "", scenario)) %>%
   filter(year <= 2050,
-         year > 2015) 
+         year > 2015) %>%
+  mutate(sector = gsub("Residential", "Resid", sector),
+         sector = gsub(" services", "", sector),
+         sector = gsub("International", "Int.", sector),
+         sector = gsub(" (pass)", "", sector)) %>%
+  left_join_error_no_match(pop.en, by = join_by(scenario, region, year)) %>%
+  mutate(         region = gsub("_", " ", region),
+                  region = if_else(grepl("Caribbean", region), "CAC", region),
+                  region = if_else(grepl("Trade", region), "EFTA", region)) %>%
+  mutate(value_pc = value * conv_ej_gj / pop)
 
 
 ggplot(fen.dec %>% filter(year == 2050), aes(x = region, y = value, fill = factor(decile, levels = c("d1", "d2", "d3", "d4", "d5",
                                                                           "d6", "d7", "d8", "d9", "d10")) )) +
   geom_col() +
-  facet_grid(factor(sector, levels = c("Residential buidlings",
-                                       "Passenger transport")) ~ scenario) + 
+  coord_flip() + 
+  facet_grid(scenario ~ factor(sector, levels = c("Resid cooling",
+                                       "Resid heating",
+                                       "Resid non-thermal",
+                                       "Passenger transport",
+                                       "Int. Aviation (pass)"))) + 
   theme_bw() + 
   labs(x = "", y = "EJ") + 
-  theme(legend.position = "right",
+  theme(legend.position = "bottom",
         legend.title = element_blank(),
-        strip.text = element_text(size = 10),
-        axis.text.x = element_text(size = 7, angle = 90, hjust = 1, vjust = .5),
-        axis.text.y = element_text(size = 11),
+        strip.text = element_text(size = 7),
+        axis.text.x = element_text(size = 8),
+        axis.text.y = element_text(size = 8),
         axis.title.y = element_text(size = 12)) + 
   scale_fill_manual(values = my_pal)
 
@@ -806,6 +830,7 @@ ggplot(adesa %>%
   theme(legend.position = "bottom",
         legend.title = element_blank()) + 
   scale_fill_manual(values = c("orange", "dodgerblue1", "forestgreen")) +
+  scale_color_manual(values = c("orange", "dodgerblue1", "forestgreen")) +
   geom_vline(xintercept = 100, color = "black", linetype = "dashed", size = 1)
 
 ggsave(paste0(here::here(), "/figures/ADESA_2050.tiff"), last_plot(), "tiff")
@@ -930,32 +955,6 @@ c.price <- getQuery(prj, "CO2 prices") %>%
          scenario = if_else(scenario == "RegGHGPol_Ineq", "Baseline", scenario)) %>%
   mutate(region = gsub("CO2", "", market)) %>%
   select(-market) %>%
-  mutate(region = gsub("Middle_East", "Middle East", region),
-         region = gsub("South_Africa", "South Africa", region))
-
-
-ggplot(c.price %>%
-         filter(region %in% selected_gcam_regions), aes(x = year, y = value, color = factor(scenario, levels = c("Narayan_etal_2023",  "Gini25", "Gini50")))) + 
-  geom_point() + 
-  geom_line() + 
-  facet_wrap(~region, scales = "free") + 
-  theme_bw() + 
-  labs(x = "", y = "CPrice (2015$/tC)") + 
-  theme(legend.position = "bottom",
-        legend.title = element_blank(),
-        legend.text = element_text(size = 13),
-        axis.text.x = element_text(size = 9),
-        axis.text.y = element_text(size = 12),
-        axis.title.y = element_text(size = 12),
-        strip.text = element_text(size = 13),
-        plot.title = element_text(size = 18, hjust = .5)) + 
-  scale_color_manual(values = c("orange", "dodgerblue1", "forestgreen")) + 
-  ggtitle("Regional carbon tax")
-#ggsave(paste0(here::here(), "/figures/Reg_CPrice.tiff"),last_plot(), "tiff")
-
-#---
-
-diff.c.price <- c.price %>%
   # adjust region names to rmap names
   mutate(
     region = if_else(region == "CAC", "Central America and Caribbean", region),
@@ -971,6 +970,51 @@ diff.c.price <- c.price %>%
     region = if_else(region == "South_Korea", "South Korea", region),
     region = if_else(region == "Southeast_Asia", "Southeast Asia", region)
   ) %>%
+  mutate(region = gsub("Middle_East", "Middle East", region),
+         region = gsub("South_Africa", "South Africa", region))
+
+
+c.price.table <- c.price %>%
+  filter(year %in% c(2050)) %>%
+  pivot_wider(names_from = "scenario",
+              values_from = "value") %>%
+  mutate(`%Diff_Gini25` = 100 * (Gini25 - Baseline) / Baseline,
+         `%Diff_Gini50` = 100 * (Gini50 - Baseline) / Baseline) %>%
+  select(region, Baseline, Gini25, Gini50, `%Diff_Gini25`, `%Diff_Gini50`) %>%
+  mutate(Baseline = round(Baseline, 0),
+         Gini25 = round(Gini25, 0),
+         Gini50 = round(Gini50, 0),
+         `%Diff_Gini25` = round(`%Diff_Gini25`, 1),
+         `%Diff_Gini50` = round(`%Diff_Gini50`, 1)) %>%
+  mutate(`%Diff_Gini25` = paste0(`%Diff_Gini25`, "%"),
+         `%Diff_Gini50` = paste0(`%Diff_Gini50`, "%"))
+  
+
+sjPlot::tab_df(c.price.table, 
+               file = "Table_cPrice.doc")
+
+# ggplot(c.price %>%
+#          filter(region %in% selected_gcam_regions), aes(x = year, y = value, color = factor(scenario, levels = c("Narayan_etal_2023",  "Gini25", "Gini50")))) + 
+#   geom_point() + 
+#   geom_line() + 
+#   facet_wrap(~region, scales = "free") + 
+#   theme_bw() + 
+#   labs(x = "", y = "CPrice (2015$/tC)") + 
+#   theme(legend.position = "bottom",
+#         legend.title = element_blank(),
+#         legend.text = element_text(size = 13),
+#         axis.text.x = element_text(size = 9),
+#         axis.text.y = element_text(size = 12),
+#         axis.title.y = element_text(size = 12),
+#         strip.text = element_text(size = 13),
+#         plot.title = element_text(size = 18, hjust = .5)) + 
+#   scale_color_manual(values = c("orange", "dodgerblue1", "forestgreen")) + 
+#   ggtitle("Regional carbon tax")
+# #ggsave(paste0(here::here(), "/figures/Reg_CPrice.tiff"),last_plot(), "tiff")
+
+#---
+
+diff.c.price <- c.price %>%
   pivot_wider(names_from = "scenario",
               values_from = "value") %>%
   mutate(Gini25 = (Gini25 - Baseline),
@@ -982,32 +1026,32 @@ diff.c.price <- c.price %>%
   replace_na(list(diff = 0)) %>%
   mutate(units = "2015$") 
 
-diff.c.price_perc <- c.price %>%
-  # adjust region names to rmap names
-  mutate(
-    region = if_else(region == "CAC", "Central America and Caribbean", region),
-    region = if_else(region == "Central_Asia", "Central Asia", region),
-    region = if_else(region == "EFTA", "European Free Trade Association", region),
-    region = if_else(region == "EU-12", "EU_12", region),
-    region = if_else(region == "EU-15", "EU_15", region),
-    region = if_else(region == "Middle_East", "Middle East", region),
-    region = if_else(region == "SAN", "South America_Northern", region),
-    region = if_else(region == "SAS", "South America_Southern", region),
-    region = if_else(region == "South_Africa", "South Africa", region),
-    region = if_else(region == "South_Asia", "South Asia", region),
-    region = if_else(region == "South_Korea", "South Korea", region),
-    region = if_else(region == "Southeast_Asia", "Southeast Asia", region)
-  ) %>%
-  pivot_wider(names_from = "scenario",
-              values_from = "value") %>%
-  mutate(Gini25 = (Gini25 - Baseline) / Baseline,
-         Gini50 = (Gini50 - Baseline) / Baseline) %>%
-  select(-Baseline, -Units) %>%
-  pivot_longer(cols = c( "Gini25", "Gini50"),
-               names_to = "scenario",
-               values_to = "diff") %>%
-  replace_na(list(diff = 0)) %>%
-  mutate(units = "2015$") 
+# diff.c.price_perc <- c.price %>%
+#   # adjust region names to rmap names
+#   mutate(
+#     region = if_else(region == "CAC", "Central America and Caribbean", region),
+#     region = if_else(region == "Central_Asia", "Central Asia", region),
+#     region = if_else(region == "EFTA", "European Free Trade Association", region),
+#     region = if_else(region == "EU-12", "EU_12", region),
+#     region = if_else(region == "EU-15", "EU_15", region),
+#     region = if_else(region == "Middle_East", "Middle East", region),
+#     region = if_else(region == "SAN", "South America_Northern", region),
+#     region = if_else(region == "SAS", "South America_Southern", region),
+#     region = if_else(region == "South_Africa", "South Africa", region),
+#     region = if_else(region == "South_Asia", "South Asia", region),
+#     region = if_else(region == "South_Korea", "South Korea", region),
+#     region = if_else(region == "Southeast_Asia", "Southeast Asia", region)
+#   ) %>%
+#   pivot_wider(names_from = "scenario",
+#               values_from = "value") %>%
+#   mutate(Gini25 = (Gini25 - Baseline) / Baseline,
+#          Gini50 = (Gini50 - Baseline) / Baseline) %>%
+#   select(-Baseline, -Units) %>%
+#   pivot_longer(cols = c( "Gini25", "Gini50"),
+#                names_to = "scenario",
+#                values_to = "diff") %>%
+#   replace_na(list(diff = 0)) %>%
+#   mutate(units = "2015$") 
 
   
 map.diff.c.price  <- diff.c.price %>%
@@ -1017,13 +1061,13 @@ map.diff.c.price  <- diff.c.price %>%
          year = as.numeric(as.character(year))) %>%
   filter(year %in% c(2050))
 
-map.diff.c.price_perc  <- diff.c.price_perc %>%
-  rename(value = diff,
-         subRegion = region) %>%
-  mutate(units = "%",
-         year = as.numeric(as.character(year)),
-         value = value * 100) %>%
-  filter(year %in% c(2050))
+# map.diff.c.price_perc  <- diff.c.price_perc %>%
+#   rename(value = diff,
+#          subRegion = region) %>%
+#   mutate(units = "%",
+#          year = as.numeric(as.character(year)),
+#          value = value * 100) %>%
+#   filter(year %in% c(2050))
 
 
 map_crpiceX <- rmap::map(data = map.diff.c.price,
@@ -1034,33 +1078,32 @@ map_crpiceX <- rmap::map(data = map.diff.c.price,
           background  = T,
           animate = T)
 
-map_cPrice_perc2050<- rmap::map(data = map.diff.c.price_perc,
-                         shape = rmap::mapGCAMReg32,
-                         folder = paste0(here::here(), "/figures/maps/cPrice_perc"),
-                         legendType = "kmeans",
-                         palette = "pal_div_BlRd",
-                         background  = T,
-                         animate = T)
+# map_cPrice_perc2050<- rmap::map(data = map.diff.c.price_perc,
+#                          shape = rmap::mapGCAMReg32,
+#                          folder = paste0(here::here(), "/figures/maps/cPrice_perc"),
+#                          legendType = "kmeans",
+#                          palette = "pal_div_BlRd",
+#                          background  = T,
+#                          animate = T)
 
 map_Cprice_2050 <- map_crpiceX$map_param_PRETTY +
-  #ggtitle("A)") + 
   theme(strip.text.y = element_text(size = 10),
         plot.title = element_text(size = 14),
         legend.position = "bottom",
         legend.text = element_text(size = 8),
         legend.title = element_text(size = 10))
 
-map_Cprice_perc_2050 <- map_cPrice_perc2050$map_param_KMEANS +
-  #ggtitle("B)") + 
-  theme(strip.text.y = element_text(size = 10),
-        plot.title = element_text(size = 14),
-        legend.position = "bottom",
-        legend.text = element_text(size = 8),
-        legend.title = element_text(size = 10))
+# map_Cprice_perc_2050 <- map_cPrice_perc2050$map_param_KMEANS +
+#   #ggtitle("B)") + 
+#   theme(strip.text.y = element_text(size = 10),
+#         plot.title = element_text(size = 14),
+#         legend.position = "bottom",
+#         legend.text = element_text(size = 8),
+#         legend.title = element_text(size = 10))
 
 
 ggsave(paste0(here::here(), "/figures/map_Cprice_2050.tiff"), map_Cprice_2050, "tiff")
-ggsave(paste0(here::here(), "/figures/map_Cprice_perc_2050.tiff"), map_Cprice_perc_2050, "tiff")
+#ggsave(paste0(here::here(), "/figures/map_Cprice_perc_2050.tiff"), map_Cprice_perc_2050, "tiff")
 
 # GHG emissions ----
 GWP <- read.csv("data/ghg_GWP.csv") %>%
