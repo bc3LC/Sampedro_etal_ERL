@@ -973,6 +973,19 @@ c.price <- getQuery(prj, "CO2 prices") %>%
   mutate(region = gsub("Middle_East", "Middle East", region),
          region = gsub("South_Africa", "South Africa", region))
 
+c.price.abs <-  c.price %>%
+  filter(year %in% c(2030, 2050)) %>%
+  pivot_wider(names_from = "scenario",
+              values_from = "value") %>%
+  mutate(`Diff_Gini25` = (Gini25 - Baseline) ,
+         `Diff_Gini50` = (Gini50 - Baseline) ) %>%
+  select(region, year, Baseline, Gini25, Gini50, `Diff_Gini25`, `Diff_Gini50`) %>%
+  mutate(Baseline = round(Baseline, 0),
+         Gini25 = round(Gini25, 0),
+         Gini50 = round(Gini50, 0),
+         `Diff_Gini25` = round(`Diff_Gini25`, 1),
+         `Diff_Gini50` = round(`Diff_Gini50`, 1))
+
 
 c.price.table <- c.price %>%
   filter(year %in% c(2050)) %>%
