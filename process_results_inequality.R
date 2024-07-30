@@ -836,6 +836,82 @@ ggplot(adesa %>%
 ggsave(paste0(here::here(), "/figures/ADESA_2050.tiff"), last_plot(), "tiff")
 
 
+
+#---
+# Calculate micronutrients consumption
+
+# Load data
+data_micronutrient <- read.csv('data/USDA_data_final.csv')
+colnames(data_micronutrient) <- c("Food", "GCAM_commodity", "Calories (kcal)", "Protein (g)",
+                                  "Carbohydrate (g)", "Sugars (g)", "Fiber (g)", "Total fat (g)",
+                                  "Fatty acids saturated (g)", "Fatty acids monounsaturated (g)",
+                                  "Fatty acids polyunsaturated (g)", "Cholesterol (mg)",
+                                  "Retinol (mcg)", "Vitamin A (mcg)", "Alpha carotene (mcg)",
+                                  "Beta carotene (mcg)", "Cryptoxanthin, beta (mcg)",
+                                  "Lycopene (mcg)", "Lutein and zeaxanthin (mcg)", "Thiamin (mg)",
+                                  "Riboflavin (mg)", "Niacin (mg)", "Vitamin B6 (mg)",
+                                  "Folic acid (mcg)", "Folate (mcg)", "Folate DFE (mcg)", # "Folate food (mcg)" = Folate
+                                  "Folate total (mcg)", "Choline (mg)", "Vitamin B12 (mcg)",
+                                  "Added vitamin B12 (mcg)", "Vitamin C (mg)",
+                                  "Vitamin D (mcg)", "Vitamin E alpha-tocopherol (mg)", # vitamin d2 and d3 = vitamin d
+                                  "Added vitamin E (mg)", "Vitamin K (mcg)", "Calcium (mg)", # Vitamin K phylloquinone = Vitamin K
+                                  "Phosphorus (mg)", "Magnesium (mg)", "Iron (mg)", "Zinc (mg)",
+                                  "Copper (mg)", "Selenium (mcg)", "Potassium (mg)", "Sodium (mg)",
+                                  "Caffeine (mg)", "Theobromine (mg)", "Alcohol (g)", "4:0 (g)",
+                                  "6:0 (g)", "8:0 (g)", "10:0 (g)", "12:0 (g)", "14:0 (g)",
+                                  "16:0 (g)", "18:0 (g)", "16:1 (g)", "18:1 (g)", "20:1 (g)",
+                                  "22:1 (g)", "18:2 (g)", "18:3 (g)", "18:4 (g)", "20:4 (g)",
+                                  "20:5 n3 (g)", "22:5 n3 (g)", "22:6 n3 (g)", "Water (g)")
+# Average over individual food items to get a representative value for each commodity
+average_data <- data_micronutrient %>%
+  tidyr::pivot_longer(cols = 3:67, names_to = "Nutrient") %>%
+  group_by(`GCAM_commodity`, Nutrient) %>%
+  summarize(average = median(value)) %>%
+  filter_all(all_vars(!stringr::str_detect(., ":"))) %>%
+  tidyr::pivot_wider(names_from = Nutrient, values_from = average) %>%
+  tidyr::pivot_longer(-c('GCAM_commodity','Calories (kcal)'), names_to = 'nutrient', values_to = 'nutrient_value') %>%
+  mutate(nutrient_value = nutrient_value/`Calories (kcal)`) %>%
+  mutate(
+    nutrient_name = stringr::str_split(nutrient, " \\(") %>%
+      sapply(function(x) x[1]),
+    nutrient_units = stringr::str_split(nutrient, " \\(") %>%
+      sapply(function(x) sub("\\)$", "", x[2])),
+    nutrient_units = paste0(nutrient_units,'/kcal')
+  ) %>%
+  select(-c(`Calories (kcal)`,nutrient)) %>%
+  ungroup()
+
+
+# Total micronutrients consumption
+micronutrients_consumption <- getQuery(prj,'food consumption by type (specific)') %>%
+  # TODO: find data of nutritional values of FiberCrop (introduce it in the average_data)
+  filter(technology != 'FiberCrop') %>%
+  left_join(read.csv("data/map_GCAM_reg.csv"), by = "region") %>% 
+  select(-region) %>% 
+  rename('region' = 'region_agg') %>% 
+  # update scenario names, filter years, and rename regions
+  mutate(scenario = if_else(grepl("Gini25", scenario), "Gini25", scenario),
+         scenario = if_else(grepl("Gini50", scenario), "Gini50", scenario),
+         scenario = if_else(grepl("RegGHGPol_Ineq", scenario), "Baseline", scenario)) %>% 
+  filter(year <= 2050,
+         year > 2015) %>% 
+  left_join(pop, by = c("year", "scenario", "region"), relationship = "many-to-many") %>%
+  # convert from Pcal to kcal/day
+  mutate(value = (value * 1e12) / (pop * 365),
+         Units = "kcal/capita/day") %>% 
+  # rename columns
+  rename('GCAM_commodity' = 'technology',
+         'consumption' = 'value') %>% 
+  left_join(average_data, by = 'GCAM_commodity', relationship = "many-to-many") %>% 
+  # compute micronutitional intake
+  mutate('total_micronutrient_intake' = consumption * nutrient_value) %>%
+  group_by(region,decile,scenario,year,nutrient_name,nutrient_units) %>%
+  summarise(total_micronutrient_intake = sum(total_micronutrient_intake, na.rm = TRUE)) %>%
+  mutate(nutrient_units = stringr::str_replace(nutrient_units, "/kcal", "/capita/day")) %>%
+  mutate(year = as.numeric(as.character(year))) %>%
+  ungroup()
+
+
 # 3 - DEMAND INEQUALITIES ----
 
 # ---
