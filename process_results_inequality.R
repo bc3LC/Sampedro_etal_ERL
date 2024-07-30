@@ -838,6 +838,55 @@ ggsave(paste0(here::here(), "/figures/ADESA_2050.tiff"), last_plot(), "tiff")
 
 
 #---
+# Calculate macronutrients consumption
+
+# Load data
+GramProteinFatPerKcal <- read.csv("data/GramProteinFatPerKcal.csv", skip = 3)
+
+## Macronutrient by Kcal of food consumption
+macronutrients_en_basic = getQuery(prj, 'food consumption by type (specific)') %>%
+  # rename columns
+  dplyr::rename('GCAM_commodity' = 'technology') %>%
+  dplyr::rename('consumption' = 'value') %>%
+  left_join(read.csv("data/map_GCAM_reg.csv"), by = "region") %>% 
+  select(-region) %>% 
+  rename('region' = 'region_agg') %>% 
+  # update scenario names, filter years, and rename regions
+  mutate(scenario = if_else(grepl("Gini25", scenario), "Gini25", scenario),
+         scenario = if_else(grepl("Gini50", scenario), "Gini50", scenario),
+         scenario = if_else(grepl("RegGHGPol_Ineq", scenario), "Baseline", scenario)) %>% 
+  filter(year <= 2050,
+         year > 2015) %>% 
+  # aggregate population data
+  dplyr::left_join(pop, by = c("year", "scenario", "region"), relationship = "many-to-many") %>%
+  # convert from Pcal to kcal/capita/day
+  dplyr::mutate(consumptionPerCapita = (consumption * 1e12) / (pop * 365),
+                Units = "kcal/capita/day") %>%
+  dplyr::left_join(GramProteinFatPerKcal %>%
+                     left_join(read.csv("data/map_GCAM_reg.csv"), by = "GCAM_region_ID") %>% 
+                     select(-region) %>% 
+                     rename(region = region_agg),
+                   by = c('GCAM_region_ID','GCAM_commodity','region'), relationship = "many-to-many") %>% 
+  # compute total Protein and Fat [kcal/capita/day]
+  dplyr::mutate(kcalProteinPerCapita = consumptionPerCapita * gProteinPerKcal * Kcalperg,
+                kcalFatPerCapita = consumptionPerCapita * gFatPerKcal * Kcalperg) %>%
+  # aggregate food commodities
+  dplyr::group_by(Units, region, scenario, year) %>%
+  dplyr::summarise(kcalProteinPerCapita = sum(kcalProteinPerCapita),
+                   kcalFatPerCapita = sum(kcalFatPerCapita),
+                   consumptionPerCapita = sum(consumptionPerCapita)) %>%
+  dplyr::ungroup() %>%
+  # compute % of protein and fat intake with respect to the kcal (energy) consumption
+  dplyr::rowwise() %>%
+  dplyr::mutate(perProteinPerCapita = kcalProteinPerCapita / consumptionPerCapita,
+                perFatPerCapita = kcalFatPerCapita / consumptionPerCapita) %>%
+  dplyr::ungroup() %>%
+  dplyr::select(Units, region, scenario, year, consumptionPerCapita,
+                perProteinPerCapita, kcalProteinPerCapita, perFatPerCapita, kcalFatPerCapita)
+
+
+
+#---
 # Calculate micronutrients consumption
 
 # Load data
