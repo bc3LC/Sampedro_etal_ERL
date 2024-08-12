@@ -82,7 +82,8 @@ ggplot(check_policy, aes(x = GHG, y = region, colour = scenario, shape = scenari
         panel.border = element_blank()) +
   scale_shape_manual(values=c(19, 19, 73)) +
   scale_size_manual(values=c(2, 2, 4)) +
-  scale_colour_manual(values = c("dodgerblue1", "forestgreen", "firebrick2"))
+  scale_colour_manual(values = c("dodgerblue1", "forestgreen", "firebrick2")) +
+  scale_y_discrete(limits=rev)
 
 ggsave(paste0(here::here(), "/figures/Price_target.tiff"),last_plot(), "tiff")  
   

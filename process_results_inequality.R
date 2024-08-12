@@ -220,6 +220,23 @@ fen <- bind_rows(fen.bld, fen.ind, fen.trn) %>%
   filter(year <= 2050,
          year > 2015)
 
+fen.abs <- bind_rows(fen.bld, fen.ind, fen.trn) %>%
+  mutate(scenario = if_else(grepl("Gini25", scenario), "Gini25", scenario),
+         scenario = if_else(grepl("Gini50", scenario), "Gini50", scenario),
+         scenario = if_else(grepl("RegGHGPol_Ineq", scenario), "Baseline", scenario)) %>%
+  filter(year %in% c(2015, 2030, 2050))
+
+fen.abs.check <- fen.abs %>%
+  group_by(scenario, year) %>%
+  summarise(value = sum(value)) %>%
+  ungroup() %>%
+  pivot_wider(names_from = "scenario",
+              values_from = "value") %>%
+  mutate(diff_Gini25 = (Gini25 - Baseline),
+         diff_Gini50 = (Gini50 - Baseline),
+         diff_Gini25_perc = (Gini25 - Baseline) / Baseline * 100,
+         diff_Gini50_perc = (Gini50 - Baseline) / Baseline * 100) 
+
 ggplot(fen, aes(x = year, y = value, fill = factor(sector, levels = c("Commercial Buildings", 
                                                                       "Residential cooling", "Residential heating", "Residential non-thermal services",
                                                                       "Industry",
@@ -243,6 +260,31 @@ ggplot(fen, aes(x = year, y = value, fill = factor(sector, levels = c("Commercia
                                 "deepskyblue1", "deepskyblue3"))
 
 ggsave(paste0(here::here(), "/figures/Fen_global_sce_sct.tiff"),last_plot(), "tiff")
+
+
+ggplot(fen.abs, aes(x = scenario, y = value, fill = factor(sector, levels = c("Commercial Buildings", 
+                                                                      "Residential cooling", "Residential heating", "Residential non-thermal services",
+                                                                      "Industry",
+                                                                      "Passenger transport", "International Aviation (pass)",
+                                                                      "Freight transport", "International shipping (freight)"))))+
+  geom_col() +
+  facet_grid( ~ year) + 
+  theme_bw() +
+  labs(x = "", y = "EJ") + 
+  theme(legend.position = "bottom",
+        legend.title = element_blank(),
+        strip.text = element_text(size = 11),
+        axis.text.x = element_text(size = 11),
+        axis.text.y = element_text(size = 11),
+        axis.title.y = element_text(size = 12)) + 
+  guides(fill = guide_legend(ncol = 3)) + 
+  scale_fill_manual(values = c("yellow2", 
+                               "salmon", "tomato3", "tomato",
+                               "violet",
+                               "yellowgreen","chartreuse2",
+                               "deepskyblue1", "deepskyblue3"))
+
+ggsave(paste0(here::here(), "/figures/FenAbs_global_sce_sct.tiff"),last_plot(), "tiff")
 
 # ---
 # Then add deciles to assess "within-region effects"
@@ -315,10 +357,28 @@ fen.dec <- bind_rows(fen.bld.dec, fen.trn.dec) %>%
   mutate(value_pc = value * conv_ej_gj / pop)
 
 
-ggplot(fen.dec %>% filter(year == 2050), aes(x = region, y = value, fill = factor(decile, levels = c("d1", "d2", "d3", "d4", "d5",
+fen.dec.tocheck <- bind_rows(fen.bld.dec, fen.trn.dec) %>%
+  mutate(scenario = if_else(grepl("Gini25", scenario), "Gini25", scenario),
+         scenario = if_else(grepl("Gini50", scenario), "Gini50", scenario),
+         scenario = if_else(grepl("RegGHGPol_Ineq", scenario), "Baseline", scenario)) %>%
+  left_join_error_no_match(read.csv("data/map_GCAM_reg.csv"), by = join_by(region)) %>%
+  group_by(scenario, region_agg, year, decile) %>%
+  summarise(value = sum(value)) %>%
+  ungroup() %>%
+  rename(region = region_agg) %>%
+  mutate(scenario = gsub("diff_", "", scenario)) %>%
+  filter(year <= 2050,
+         year > 2015) %>%
+  left_join_error_no_match(pop.en, by = join_by(scenario, region, year)) %>%
+  mutate(         region = gsub("_", " ", region),
+                  region = if_else(grepl("Caribbean", region), "CAC", region),
+                  region = if_else(grepl("Trade", region), "EFTA", region)) %>%
+  mutate(value_pc = value * conv_ej_gj / (pop * 0.1))
+
+
+ggplot(fen.dec %>% filter(year == 2050), aes(x = value, y = region, fill = factor(decile, levels = c("d1", "d2", "d3", "d4", "d5",
                                                                           "d6", "d7", "d8", "d9", "d10")) )) +
   geom_col() +
-  coord_flip() + 
   facet_grid(scenario ~ factor(sector, levels = c("Resid cooling",
                                        "Resid heating",
                                        "Resid non-thermal",
@@ -332,9 +392,30 @@ ggplot(fen.dec %>% filter(year == 2050), aes(x = region, y = value, fill = facto
         axis.text.x = element_text(size = 8),
         axis.text.y = element_text(size = 8),
         axis.title.y = element_text(size = 12)) + 
-  scale_fill_manual(values = my_pal)
+  scale_fill_manual(values = my_pal) +
+  scale_y_discrete(limits = rev)
 
 ggsave(paste0(here::here(), "/figures/Fen_dec_sce_sct_2050.tiff"),last_plot(), "tiff")
+
+
+ggplot(fen.dec.tocheck %>% filter(year == 2050, decile == "d1"), aes(x = scenario, y = value_pc, fill = scenario)) +
+  geom_col() +
+  #facet_grid(region ~ factor(decile, levels = c("d1", "d2", "d3", "d4", "d5",
+  #                                                "d6", "d7", "d8", "d9", "d10"))) +
+  facet_wrap(~ region) +
+  theme_bw() + 
+  labs(x = "", y = "GJ/pers") + 
+  geom_hline(yintercept = 16, linetype = 'dashed', col = 'red')+
+  theme(legend.position = "bottom",
+        legend.title = element_blank(),
+        strip.text = element_text(size = 8),
+        axis.text.x = element_text(size = 7),
+        axis.text.y = element_text(size = 9),
+        axis.title.y = element_text(size = 10)) + 
+  scale_fill_manual(values = c("orange","dodgerblue1", "forestgreen")) 
+
+ggsave(paste0(here::here(), "/figures/Check_FEN_dec_sce_sct_2050.tiff"),last_plot(), "tiff")
+
 
 # ---
 # Check international aviation
@@ -498,13 +579,167 @@ ggplot(ccs, aes(x = value, y = region, fill = fuel)) +
 
 ggsave(paste0(here::here(), "/figures/ccs_sce_fuel_2050.tiff"),last_plot(), "tiff")
 
+# Check changes in CCS, H2, non-bio renewables, biomass and forest
+ccs.check <- getQuery(prj, "primary energy consumption with CCS by region (direct equivalent)") %>%
+  filter(grepl("CCS", fuel))
+
+renew.check <- getQuery(prj, "primary energy consumption by region (avg fossil efficiency)") %>%
+  filter(!grepl("coal", fuel)) %>%
+  filter(!grepl("oil", fuel)) %>%
+  filter(!grepl("gas", fuel)) %>%
+  bind_rows(ccs.check) %>%
+  filter(year == 2050) %>%
+  group_by(scenario, fuel, year, Units) %>%
+  summarise(value = sum(value)) %>%
+  ungroup() %>%
+  mutate(scenario = if_else(grepl("Gini25", scenario), "Gini25", scenario),
+         scenario = if_else(grepl("Gini50", scenario), "Gini50", scenario),
+         scenario = if_else(grepl("RegGHGPol_Ineq", scenario), "Baseline", scenario)) %>%
+  pivot_wider(names_from = "scenario",
+              values_from = "value") %>%
+  mutate(diff_Gini25 = Gini25 - Baseline,
+         diff_Gini50 = Gini50 - Baseline) %>%
+  select(year, fuel, Units, starts_with("diff")) 
+  
+land.check <- getQuery(prj, "detailed land allocation") %>%
+  filter(grepl("Forest", landleaf),
+         !grepl("Unmanaged", landleaf)) %>%
+  filter(year == 2050) %>%
+  group_by(scenario, year, Units) %>%
+  summarise(value = sum(value)) %>%
+  ungroup() %>%
+  mutate(scenario = if_else(grepl("Gini25", scenario), "Gini25", scenario),
+         scenario = if_else(grepl("Gini50", scenario), "Gini50", scenario),
+         scenario = if_else(grepl("RegGHGPol_Ineq", scenario), "Baseline", scenario)) %>%
+  pivot_wider(names_from = "scenario",
+              values_from = "value") %>%
+  mutate(diff_Gini25 = Gini25 - Baseline,
+         diff_Gini50 = Gini50 - Baseline) %>%
+  select(year, Units, starts_with("diff")) 
+
 
 
 # ---
 
 # 2 - FOOD DEMAND  ----
 
-# 2.1 Regional changes in food consumption ----
+# 2.1 Changes in total food consumption by type ----
+glob.food.type <- getQuery(prj, "food consumption by type (specific)") %>%
+  group_by(scenario, subsector = `technology`, year, Units) %>%
+  summarise(value = sum(value)) %>%
+  ungroup() %>%
+  mutate(scenario = if_else(grepl("Gini25", scenario), "Gini25", scenario),
+         scenario = if_else(grepl("Gini50", scenario), "Gini50", scenario),
+         scenario = if_else(grepl("RegGHGPol_Ineq", scenario), "Baseline", scenario)) %>%
+  pivot_wider(names_from = "scenario",
+              values_from = "value") %>%
+  mutate(diff_Gini25 = Gini25 - Baseline,
+         diff_Gini50 = Gini50 - Baseline) %>%
+  select(year, subsector, Units, starts_with("diff")) %>%
+  pivot_longer(cols = c("diff_Gini25", "diff_Gini50"),
+               names_to = "scenario",
+               values_to = "value") %>%
+  mutate(scenario = gsub("diff_", "", scenario)) %>%
+  filter(year <= 2050,
+         year > 2015)
+
+glob.food.type.abs <- getQuery(prj, "food consumption by type (specific)") %>%
+  group_by(scenario, subsector = `technology`, year, Units) %>%
+  summarise(value = sum(value)) %>%
+  ungroup() %>%
+  mutate(scenario = if_else(grepl("Gini25", scenario), "Gini25", scenario),
+         scenario = if_else(grepl("Gini50", scenario), "Gini50", scenario),
+         scenario = if_else(grepl("RegGHGPol_Ineq", scenario), "Baseline", scenario)) %>%
+  filter(year %in% c(2015, 2030, 2050))
+
+glob.food.type.abs.check <- glob.food.type.abs %>%
+  group_by(scenario, year) %>%
+  summarise(value = sum(value)) %>%
+  ungroup() %>%
+  pivot_wider(names_from = "scenario",
+              values_from = "value") %>%
+  mutate(diff_Gini25 = (Gini25 - Baseline),
+         diff_Gini50 = (Gini50 - Baseline),
+         diff_Gini25_perc = (Gini25 - Baseline) / Baseline * 100,
+         diff_Gini50_perc = (Gini50 - Baseline) / Baseline * 100) 
+
+
+ggplot(glob.food.type, aes(x = year, y = value, fill = factor(subsector, levels = c(
+  
+  "Corn", "OtherGrain", "Rice", "Wheat",
+  "Fruits", "Vegetables",
+  "Legumes", "NutsSeeds",
+  "FiberCrop", "MiscCrop","RootTuber",
+  "OilCrop", "OilPalm", "Soybean", "SugarCrop",
+  "OtherMeat_Fish", "Beef", "Dairy", "Pork", "Poultry", "SheepGoat"
+    
+  
+))))+
+  geom_col() +
+  facet_grid( ~ scenario) + 
+  theme_bw() +
+  labs(x = "", y = "Pcal") + 
+  theme(legend.position = "bottom",
+        legend.title = element_blank(),
+        legend.text = element_text(size = 8),
+        strip.text = element_text(size = 11),
+        axis.text.x = element_text(size = 11),
+        axis.text.y = element_text(size = 11),
+        axis.title.y = element_text(size = 12)) + 
+  guides(fill = guide_legend(ncol = 7)) + 
+  theme(legend.key.size = unit(0.4, "cm")) +
+  scale_fill_manual(values = c("yellow1", "yellow2" , "yellow3", "gold2" ,
+                               "chartreuse2","forestgreen",
+                               "orange1", "orange3",
+                               "violet",  "mediumorchid1", "darkorchid3",
+                               "deepskyblue1", "deepskyblue2","deepskyblue3", "lightblue3",
+                               "hotpink1","tomato1", "tomato2", "firebrick1", "firebrick3", "tomato3"
+
+
+))
+
+ggsave(paste0(here::here(), "/figures/GlobFoodSub_diffSce.tiff"),last_plot(), "tiff")
+
+
+ggplot(glob.food.type.abs, aes(x = scenario, y = value, fill = factor(subsector, levels = c(
+  
+  "Corn", "OtherGrain", "Rice", "Wheat",
+  "Fruits", "Vegetables",
+  "Legumes", "NutsSeeds",
+  "FiberCrop", "MiscCrop","RootTuber",
+  "OilCrop", "OilPalm", "Soybean", "SugarCrop",
+  "OtherMeat_Fish", "Beef", "Dairy", "Pork", "Poultry", "SheepGoat"
+  
+  
+))))+
+  geom_col() +
+  facet_grid( ~ year) + 
+  theme_bw() +
+  labs(x = "", y = "Pcal") + 
+  theme(legend.position = "bottom",
+        legend.title = element_blank(),
+        legend.text = element_text(size = 8),
+        strip.text = element_text(size = 11),
+        axis.text.x = element_text(size = 11),
+        axis.text.y = element_text(size = 11),
+        axis.title.y = element_text(size = 12)) + 
+  guides(fill = guide_legend(ncol = 7)) + 
+  theme(legend.key.size = unit(0.4, "cm")) +
+  scale_fill_manual(values = c("yellow1", "yellow2" , "yellow3", "gold2" ,
+                               "chartreuse2","forestgreen",
+                               "orange1", "orange3",
+                               "violet",  "mediumorchid1", "darkorchid3",
+                               "deepskyblue1", "deepskyblue2","deepskyblue3", "lightblue3",
+                               "hotpink1","tomato1", "tomato2", "firebrick1", "firebrick3", "tomato3"
+                               
+                               
+  ))
+
+ggsave(paste0(here::here(), "/figures/GlobFoodSubAbs_Sce.tiff"),last_plot(), "tiff")
+
+
+
+# 2.2 Regional changes in food consumption ----
 food <- getQuery(prj, "food demand") %>%
   separate(`gcam-consumer`, c("adj", "decile")) %>%
   separate(input, c("adj2", "demand")) %>%
@@ -608,7 +843,7 @@ map_food_sub_2050 <- map_food.sub$map_param_KMEANS +
 
 ggsave(paste0(here::here(), "/figures/FoodSub_map_diffSce_2050.tiff"),map_food_sub_2050, "tiff")
 
-# 2.2 Within-region changes in calorie consumption ----
+# 2.3 Within-region changes in calorie consumption ----
 pop <- getQuery(prj, "Population by region") %>%
   mutate(value = value * 1E3) %>%
   as_tibble() %>%
@@ -656,23 +891,25 @@ food_pc <- getQuery(prj, "food demand") %>%
          region = if_else(grepl("Trade", region), "EFTA", region))
 
 
-ggplot(food_pc %>% filter(year == 2050), aes(x = region, y = value, fill = factor(decile, levels = c("d1", "d2", "d3", "d4", "d5",
-                                                                          "d6", "d7", "d8", "d9", "d10")) )) +
+ggplot(food_pc %>% filter(year == 2050), aes(x = value, y = region, fill = demand )) +
   geom_col() +
-  facet_grid(demand ~ scenario) + 
+  facet_grid(scenario ~ factor(decile, levels = c("d1", "d2", "d3", "d4", "d5",
+                                                  "d6", "d7", "d8", "d9", "d10"))) + 
   theme_bw() + 
   labs(x = "", y = "kcal/pc/day") + 
-  theme(legend.position = "right",
+  theme(legend.position = "bottom",
         legend.title = element_blank(),
         strip.text = element_text(size = 10),
-        axis.text.x = element_text(size = 7, angle = 90, hjust = 1, vjust = .5),
-        axis.text.y = element_text(size = 11),
-        axis.title.y = element_text(size = 12)) + 
-  scale_fill_manual(values = my_pal)
+        axis.text.x = element_text(size = 5, angle = 90, hjust = 1, vjust = .5),
+        axis.text.y = element_text(size = 8),
+        axis.title.y = element_text(size = 12),
+        plot.title = element_text()) + 
+  scale_fill_manual(values = c("deepskyblue", "yellowgreen")) +
+  scale_y_discrete(limits = rev)
 
 ggsave(paste0(here::here(), "/figures/Food_sce_dec_Check.tiff"),last_plot(), "tiff")
 
-# 2.3 Changes in nutrition ----
+# 2.4 Changes in nutrition ----
 
 #---
 # Load data
@@ -831,7 +1068,8 @@ ggplot(adesa %>%
         legend.title = element_blank()) + 
   scale_fill_manual(values = c("orange", "dodgerblue1", "forestgreen")) +
   scale_color_manual(values = c("orange", "dodgerblue1", "forestgreen")) +
-  geom_vline(xintercept = 100, color = "black", linetype = "dashed", size = 1)
+  geom_vline(xintercept = 100, color = "black", linetype = "dashed", size = 1) +
+  scale_y_discrete(limits=rev)
 
 ggsave(paste0(here::here(), "/figures/ADESA_2050.tiff"), last_plot(), "tiff")
 
