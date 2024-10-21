@@ -1238,7 +1238,40 @@ gini.fin <- pridr::compute_gini_deciles(gini,
                                         grouping_variables = c("scenario", "region", "sector", "year")) %>%
   rename(gini = output_name) %>%
   select(scenario, region, sector, year, gini) %>%
-  distinct()
+  distinct() %>%
+  dplyr::rename(subRegion = region,
+                value = gini,
+                class = sector) %>%
+  filter(year %in% c(2030, 2050)) %>%
+  mutate(scenario = factor(scenario, levels = c("Baseline", "Gini25", "Gini50")),
+         class = factor(class, levels = c("Resid cooling", "Resid heating", "Resid non-thermal",
+                                          "Domestic transportation", "International aviation",
+                                          "Non-staple food")))
+
+mapx <- rmap::map(data = gini.fin,
+                  shape = mapGCAMReg32,
+                  folder ="figures/maps/gini",
+                  legendType = "kmeans",
+                  #palette = "Reds",
+                  #legendType = "continuous",
+                  background  = T)
+
+map_2030 <- mapx$map_param_2030_KMEANS +
+  theme(strip.text.y = element_text(size = 6),
+        strip.text.x = element_text(size = 6),
+        plot.title = element_blank(),
+        legend.position = "bottom",
+        legend.text = element_text(size = 8))
+
+map_2050 <- mapx$map_param_2050_KMEANS +
+  theme(strip.text.y = element_text(size = 6),
+        strip.text.x = element_text(size = 6),
+        plot.title = element_blank(),
+        legend.position = "bottom",
+        legend.text = element_text(size = 8))
+
+ggsave(paste0(here::here(), "/figures/map_2030_gini.tiff"), map_2030, "tiff")
+ggsave(paste0(here::here(), "/figures/map_2050_gini.tiff"), map_2050, "tiff")
 
 
 # 4 - CLIMATE CHANGE MITIGATION: CARBON PRICES -----
