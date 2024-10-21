@@ -1178,6 +1178,68 @@ map_2050 <- mapx$map_param_2050_KMEANS +
 ggsave(paste0(here::here(), "/figures/map_2030.tiff"), map_2030, "tiff")
 ggsave(paste0(here::here(), "/figures/map_2050.tiff"), map_2050, "tiff")
 
+# Calc Ginis
+gini.hh <- getQuery(prj, "building final energy by service and fuel") %>%
+  filter(scenario %in% sel_sce) %>%
+  mutate(scenario = if_else(grepl("Gini25", scenario), "Gini25", scenario),
+         scenario = if_else(grepl("Gini50", scenario), "Gini50", scenario),
+         scenario = if_else(scenario == "RegGHGPol_Ineq", "Baseline", scenario)) %>%
+  # filter modern fuels
+  filter(grepl("modern", sector)) %>%
+  separate(sector, c("sector", "decile"), sep = "_") %>%
+  mutate(sector = if_else(grepl("cooling", sector), "Resid cooling", sector),
+         sector = if_else(grepl("heating", sector), "Resid heating", sector),
+         sector = if_else(grepl("others", sector), "Resid non-thermal", sector)) %>%
+  group_by(scenario, region, sector, decile, year) %>%
+  summarise(value = sum(value)) %>%
+  ungroup() 
+
+gini.trn <- getQuery(prj, "transport service output by tech") %>%
+  filter(scenario %in% sel_sce) %>%
+  mutate(scenario = if_else(grepl("Gini25", scenario), "Gini25", scenario),
+         scenario = if_else(grepl("Gini50", scenario), "Gini50", scenario),
+         scenario = if_else(scenario == "RegGHGPol_Ineq", "Baseline", scenario)) %>%
+  filter(grepl("trn_pass_d", sector) | grepl("aviat", sector)) %>%
+  mutate(sector = sub("_([^_]*)$", "_split_\\1", sector)) %>%
+  tidyr::separate(sector, into = c("sector", "decile"), sep = "_split_", extra = "merge", fill = "right") %>%
+  group_by(scenario, region, sector, decile, year) %>%
+  summarise(value = sum(value)) %>%
+  ungroup() %>%
+  mutate(sector = if_else(grepl("aviation", sector), "International aviation", "Domestic transportation"))
+
+gini.food <- getQuery(prj, "food demand") %>%
+  filter(scenario %in% sel_sce) %>%
+  mutate(scenario = if_else(grepl("Gini25", scenario), "Gini25", scenario),
+         scenario = if_else(grepl("Gini50", scenario), "Gini50", scenario),
+         scenario = if_else(scenario == "RegGHGPol_Ineq", "Baseline", scenario)) %>%
+  filter(grepl("NonStaples", input)) %>%
+  separate( `gcam-consumer`, c("sector", "decile"), sep = "_") %>%
+  mutate(decile = gsub("Group", "d", decile),
+         sector = "Non-staple food") %>%
+  group_by(scenario, region, sector, decile, year) %>%
+  summarise(value = sum(value)) %>%
+  ungroup()
+
+
+gini <- bind_rows(gini.hh, gini.trn, gini.food) %>%
+  filter(year <= 2050) %>%
+  rename(category = decile) %>%
+  group_by(scenario,region,sector,year) %>%
+  mutate(value_reg = sum(value)) %>%
+  ungroup() %>%
+  mutate(share = value / value_reg) %>%
+  group_by(scenario,region,sector,year) %>%
+  mutate(share_check = sum(share)) %>%
+  ungroup() %>%
+  select(scenario, region, sector, category, year, share)
+
+gini.fin <- pridr::compute_gini_deciles(gini, 
+                                        inc_col = "share" , 
+                                        grouping_variables = c("scenario", "region", "sector", "year")) %>%
+  rename(gini = output_name) %>%
+  select(scenario, region, sector, year, gini) %>%
+  distinct()
+
 
 # 4 - CLIMATE CHANGE MITIGATION: CARBON PRICES -----
 # Carbon Prices ----
