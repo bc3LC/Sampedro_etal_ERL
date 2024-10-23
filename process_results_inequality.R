@@ -357,6 +357,48 @@ fen.dec <- bind_rows(fen.bld.dec, fen.trn.dec) %>%
   mutate(value_pc = value * conv_ej_gj / pop)
 
 
+pop_adj <- getQuery(prj, "Population by region") %>%
+  mutate(value = value * 1E3) %>%
+  as_tibble() %>%
+  select(-Units) %>%
+  mutate(scenario = if_else(grepl("Gini25", scenario), "Gini25", scenario),
+         scenario = if_else(grepl("Gini50", scenario), "Gini50", scenario),
+         scenario = if_else(grepl("RegGHGPol_Ineq", scenario), "Baseline", scenario)) %>%
+  repeat_add_columns(tibble(decile = deciles)) %>%
+  mutate(value = value * 1/length(deciles)) %>%
+  rename(pop = value)
+
+gdp_chg_d1 <- getQuery(prj, "subregional income") %>%
+  filter(grepl("resid", `gcam-consumer`)) %>%
+  as_tibble() %>%
+  mutate(scenario = if_else(grepl("Gini25", scenario), "Gini25", scenario),
+         scenario = if_else(grepl("Gini50", scenario), "Gini50", scenario),
+         scenario = if_else(grepl("RegGHGPol_Ineq", scenario), "Baseline", scenario)) %>%
+  separate(`gcam-consumer`, c("adj", "decile")) %>%
+  select(-adj) %>%
+  filter(decile == "d1",
+         year %in% c(2020, 2050)) %>%
+  pivot_wider(names_from = "year",
+              values_from = "value") %>%
+  mutate(gdp_pc_change = `2050` / `2020`) %>%
+  select(scenario, region, decile, gdp_pc_change)
+  
+  
+fen.dec.d1.evol <- bind_rows(fen.bld.dec, fen.trn.dec) %>%
+  filter(decile == "d1",
+         year %in% c(2020, 2050)) %>%
+  mutate(scenario = if_else(grepl("Gini25", scenario), "Gini25", scenario),
+         scenario = if_else(grepl("Gini50", scenario), "Gini50", scenario),
+         scenario = if_else(grepl("RegGHGPol_Ineq", scenario), "Baseline", scenario)) %>%
+  left_join_error_no_match(pop_adj, by = join_by(scenario, region, decile, year)) %>%
+  mutate(value_pc = value * conv_ej_gj / pop) %>%
+  select(-value, -pop) %>%
+  pivot_wider(names_from = "year",
+              values_from = "value_pc") %>%
+  mutate(change = `2050` / `2020`) %>%
+  left_join_error_no_match(gdp_chg_d1, by = join_by(scenario, region, decile))
+
+
 fen.dec.tocheck <- bind_rows(fen.bld.dec, fen.trn.dec) %>%
   mutate(scenario = if_else(grepl("Gini25", scenario), "Gini25", scenario),
          scenario = if_else(grepl("Gini50", scenario), "Gini50", scenario),
@@ -1289,7 +1331,7 @@ ggsave(paste0(here::here(), "/figures/map_2050_gini.tiff"), map_2050, "tiff")
 
 
 # 4 - CLIMATE CHANGE MITIGATION: CARBON PRICES -----
-# Carbon Prices ----
+# 4.1 Carbon Prices ----
 c.price <- getQuery(prj, "CO2 prices") %>%
   filter(!grepl("FUG", market),
          !grepl("LUC", market),
@@ -1515,6 +1557,33 @@ ggplot(ghg_total, aes(x = year, y = value, colour = scenario)) +
         axis.title = element_text(size = 13))
 
 ggsave(paste0(here::here(), "/figures/glob_ghg_em.tiff"), last_plot(), "tiff")
+
+# 4.2 Policy costs ----
+prj_cost <- loadProject("Paper_inequality_PolicyCosts.dat")
+listScenarios(prj_cost)
+QUERY_LIST <- listQueries(prj_cost)
+
+gdp_mer <- getQuery(prj_cost, "GDP MER by region")
+
+pol_cost <- getQuery(prj_cost, "policy cost by period") %>%
+  mutate(unit_polcost = "Million$1990") %>%
+  mutate(scenario = if_else(grepl("Gini25", scenario), "Gini25", scenario),
+         scenario = if_else(grepl("Gini50", scenario), "Gini50", scenario),
+         scenario = if_else(grepl("RegGHGPol_Ineq", scenario), "Baseline", scenario)) %>%
+  pivot_wider(names_from = "scenario",
+              values_from = "value") %>%
+  mutate(diff_Gini25 = Gini25 - Baseline,
+         diff_Gini50 = Gini50 - Baseline) %>%
+  select(year, region, Units, starts_with("diff")) %>%
+  pivot_longer(cols = c("diff_Gini25", "diff_Gini50"),
+               names_to = "scenario",
+               values_to = "value") %>%
+  mutate(scenario = gsub("diff_", "", scenario)) %>%
+  filter(year == 2050) %>%
+  select(scenario, region, year, unit_polcost, PolCost = value) %>%
+  left_join_error_no_match(gdp_mer, by = join_by(scenario, region, year))
+
+
 
 
 # =======================================================================
