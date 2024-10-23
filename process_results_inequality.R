@@ -622,6 +622,7 @@ land.check <- getQuery(prj, "detailed land allocation") %>%
 # ---
 
 # 2 - FOOD DEMAND  ----
+staple_commodities <- c("Corn", "Rice", "RootTuber", "Wheat", "OtherGrain")
 
 # 2.1 Changes in total food consumption by type ----
 glob.food.type <- getQuery(prj, "food consumption by type (specific)") %>%
@@ -641,7 +642,14 @@ glob.food.type <- getQuery(prj, "food consumption by type (specific)") %>%
                values_to = "value") %>%
   mutate(scenario = gsub("diff_", "", scenario)) %>%
   filter(year <= 2050,
-         year > 2015)
+         year > 2015) %>%
+  mutate(sector = if_else(subsector %in% staple_commodities, "Staples", "Non-staples"))
+
+glob.food.type.sct <- glob.food.type %>%
+  group_by(scenario, sector, year, Units) %>%
+  summarise(value = sum(value)) %>% 
+  ungroup()
+  
 
 glob.food.type.abs <- getQuery(prj, "food consumption by type (specific)") %>%
   group_by(scenario, subsector = `technology`, year, Units) %>%
@@ -666,17 +674,17 @@ glob.food.type.abs.check <- glob.food.type.abs %>%
 
 ggplot(glob.food.type, aes(x = year, y = value, fill = factor(subsector, levels = c(
   
-  "Corn", "OtherGrain", "Rice", "Wheat",
+  "Corn", "OtherGrain", "RootTuber",  "Rice", "Wheat",
   "Fruits", "Vegetables",
   "Legumes", "NutsSeeds",
-  "FiberCrop", "MiscCrop","RootTuber",
+  "FiberCrop", "MiscCrop",
   "OilCrop", "OilPalm", "Soybean", "SugarCrop",
   "OtherMeat_Fish", "Beef", "Dairy", "Pork", "Poultry", "SheepGoat"
     
   
 ))))+
   geom_col() +
-  facet_grid( ~ scenario) + 
+  facet_grid(factor(sector, levels = c("Staples", "Non-staples")) ~ scenario) + 
   theme_bw() +
   labs(x = "", y = "Pcal") + 
   theme(legend.position = "bottom",
@@ -688,10 +696,10 @@ ggplot(glob.food.type, aes(x = year, y = value, fill = factor(subsector, levels 
         axis.title.y = element_text(size = 12)) + 
   guides(fill = guide_legend(ncol = 7)) + 
   theme(legend.key.size = unit(0.4, "cm")) +
-  scale_fill_manual(values = c("yellow1", "yellow2" , "yellow3", "gold2" ,
+  scale_fill_manual(values = c("yellow1", "yellow2" , "yellow3", "gold3" ,"gold1" ,
                                "chartreuse2","forestgreen",
                                "orange1", "orange3",
-                               "violet",  "mediumorchid1", "darkorchid3",
+                               "violet",  "mediumorchid1",
                                "deepskyblue1", "deepskyblue2","deepskyblue3", "lightblue3",
                                "hotpink1","tomato1", "tomato2", "firebrick1", "firebrick3", "tomato3"
 
@@ -765,7 +773,13 @@ food.map <- food %>%
   rename(sce = scenario) %>%
   group_by(sce, subRegion = region, year, demand, Units) %>%
   summarise(value = sum(value)) %>%
-  ungroup()
+  ungroup() %>%
+  # adjust minor solving error
+  mutate(value = if_else(subRegion == "Central Asia" &
+                           year == 2050 &
+                           demand == "NonStaples",
+                          0,
+                         value))
   
   
   map_food <- rmap::map(data = food.map %>% filter(year == 2050),
