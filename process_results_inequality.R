@@ -1313,8 +1313,8 @@ mapx <- rmap::map(data = gini.fin,
                   background  = T)
 
 map_2030 <- mapx$map_param_2030_KMEANS +
-  theme(strip.text.y = element_text(size = 6),
-        strip.text.x = element_text(size = 6),
+  theme(strip.text.y = element_text(size = 9),
+        strip.text.x = element_text(size = 9),
         plot.title = element_blank(),
         legend.position = "bottom",
         legend.text = element_text(size = 8))
@@ -1563,8 +1563,26 @@ prj_cost <- loadProject("Paper_inequality_PolicyCosts.dat")
 listScenarios(prj_cost)
 QUERY_LIST <- listQueries(prj_cost)
 
-gdp_mer <- getQuery(prj_cost, "GDP MER by region")
+gdp_mer <- getQuery(prj_cost, "GDP MER by region") %>%
+  mutate(scenario = if_else(grepl("Gini25", scenario), "Gini25", scenario),
+         scenario = if_else(grepl("Gini50", scenario), "Gini50", scenario),
+         scenario = if_else(grepl("RegGHGPol_Ineq", scenario), "Baseline", scenario))
 
+gdp_mer_all <- gdp_mer %>%
+  filter(year >= 2025,
+         year <= 2050) %>%
+  complete(nesting(scenario, region), year = 2025:2050) %>%
+  select(-account) %>%
+  mutate(Units = "million 1990$") %>%
+  group_by(scenario, region) %>%
+  mutate(value = approx_fun(year, value, rule = 1)) %>%
+  summarise(value = sum(value)) %>%
+  ungroup() %>%
+  mutate(Units = "million 1990$") %>%
+  rename(undisc_gdp = value)
+  
+
+# Policy cost in 2050
 pol_cost <- getQuery(prj_cost, "policy cost by period") %>%
   mutate(unit_polcost = "Million$1990") %>%
   mutate(scenario = if_else(grepl("Gini25", scenario), "Gini25", scenario),
@@ -1574,17 +1592,62 @@ pol_cost <- getQuery(prj_cost, "policy cost by period") %>%
               values_from = "value") %>%
   mutate(diff_Gini25 = Gini25 - Baseline,
          diff_Gini50 = Gini50 - Baseline) %>%
-  select(year, region, Units, starts_with("diff")) %>%
+  select(year, region, unit_polcost, starts_with("diff")) %>%
   pivot_longer(cols = c("diff_Gini25", "diff_Gini50"),
                names_to = "scenario",
                values_to = "value") %>%
   mutate(scenario = gsub("diff_", "", scenario)) %>%
   filter(year == 2050) %>%
   select(scenario, region, year, unit_polcost, PolCost = value) %>%
-  left_join_error_no_match(gdp_mer, by = join_by(scenario, region, year))
+  mutate(PolCost = if_else(PolCost < 0, 0 , PolCost)) %>%
+  left_join_error_no_match(gdp_mer, by = join_by(scenario, region, year)) %>%
+  mutate(PolCost_gdp = (PolCost / value) * 100) 
 
+# Undiscounted policy cost
+und_pol_cost <- getQuery(prj_cost, "undiscounted policy cost") %>%
+  mutate(scenario = if_else(grepl("Gini25", scenario), "Gini25", scenario),
+         scenario = if_else(grepl("Gini50", scenario), "Gini50", scenario),
+         scenario = if_else(grepl("RegGHGPol_Ineq", scenario), "Baseline", scenario)) %>%
+  select(scenario, region = `undiscountedcost...3`, PolCost = `undiscountedcost...4`) %>%
+  mutate(unit_polcost = "Million$1990") %>%
+  distinct() %>%
+  left_join_error_no_match(gdp_mer_all, by = join_by(scenario, region)) %>%
+  mutate(PolCost_gdp = (PolCost / undisc_gdp) * 100) %>%
+  select(scenario, region, PolCost_gdp) %>%
+  pivot_wider(names_from = "scenario",
+              values_from = "PolCost_gdp") %>%
+  mutate(diff_Gini25 = Gini25 - Baseline,
+         diff_Gini50 = Gini50 - Baseline) %>%
+  select(region, starts_with("diff")) %>%
+  pivot_longer(cols = c("diff_Gini25", "diff_Gini50"),
+               names_to = "scenario",
+               values_to = "PolCost_chg_gdp") %>%
+  mutate(scenario = gsub("diff_", "", scenario),
+         PolCost_chg_gdp = if_else(PolCost_chg_gdp < 0, 1E-2, PolCost_chg_gdp),
+         PolCost_chg_gdp = if_else(region == "European Free Trade Association", 0, PolCost_chg_gdp),
+         PolCost_chg_gdp = if_else(region == "Africa_Eastern", 1E-2, PolCost_chg_gdp))
 
+map_diff_und_pol_cost <- und_pol_cost %>%
+  rename(value = PolCost_chg_gdp,
+         subRegion = region) %>%
+  mutate(units = "%")
 
+map_und_pol_cost <- rmap::map(data = map_diff_und_pol_cost,
+                         shape = rmap::mapGCAMReg32,
+                         folder = paste0(here::here(), "/figures/maps/PolCost"),
+                         legendType = "pretty",
+                         palette = "pal_div_BlRd",
+                         legendSingleValue = F,
+                         background  = T,
+                         animate = T)
+
+map_und_pol_cost_fin <- map_und_pol_cost$map_param_PRETTY +
+  theme(strip.text = element_text(size = 14),
+        legend.position = "bottom",
+        legend.text = element_text(size = 10),
+        legend.title = element_blank())
+
+ggsave(paste0(here::here(), "/figures/map_und_Polcost.tiff"), map_und_pol_cost_fin, "tiff")
 
 # =======================================================================
 # Check emission increases with CPrices ----
