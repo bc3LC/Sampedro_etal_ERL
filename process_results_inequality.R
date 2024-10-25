@@ -1580,6 +1580,11 @@ gdp_mer_all <- gdp_mer %>%
   ungroup() %>%
   mutate(Units = "million 1990$") %>%
   rename(undisc_gdp = value)
+
+gdp_mer_all_glob <- gdp_mer_all %>%
+  group_by(scenario, Units) %>%
+  summarise(undisc_gdp = sum(undisc_gdp)) %>%
+  ungroup()
   
 
 # Policy cost in 2050
@@ -1627,6 +1632,32 @@ und_pol_cost <- getQuery(prj_cost, "undiscounted policy cost") %>%
          PolCost_chg_gdp = if_else(region == "European Free Trade Association", 0, PolCost_chg_gdp),
          PolCost_chg_gdp = if_else(region == "Africa_Eastern", 1E-2, PolCost_chg_gdp))
 
+und_pol_cost_glob <- getQuery(prj_cost, "undiscounted policy cost") %>%
+  mutate(scenario = if_else(grepl("Gini25", scenario), "Gini25", scenario),
+         scenario = if_else(grepl("Gini50", scenario), "Gini50", scenario),
+         scenario = if_else(grepl("RegGHGPol_Ineq", scenario), "Baseline", scenario)) %>%
+  select(scenario, region = `undiscountedcost...3`, PolCost = `undiscountedcost...4`) %>%
+  mutate(unit_polcost = "Million$1990") %>%
+  distinct() %>%
+  group_by(scenario, unit_polcost) %>%
+  summarise(PolCost = sum(PolCost)) %>%
+  ungroup() %>%
+  left_join_error_no_match(gdp_mer_all_glob, by = join_by(scenario)) %>%
+  mutate(PolCost_gdp = (PolCost / undisc_gdp) * 100) %>%
+  select(scenario, PolCost_gdp) %>%
+  pivot_wider(names_from = "scenario",
+              values_from = "PolCost_gdp") %>%
+  mutate(diff_Gini25 = Gini25 - Baseline,
+         diff_Gini50 = Gini50 - Baseline) %>%
+  select(starts_with("diff")) %>%
+  pivot_longer(cols = c("diff_Gini25", "diff_Gini50"),
+               names_to = "scenario",
+               values_to = "PolCost_chg_gdp") %>%
+  mutate(scenario = gsub("diff_", "", scenario))
+
+
+
+
 map_diff_und_pol_cost <- und_pol_cost %>%
   rename(value = PolCost_chg_gdp,
          subRegion = region) %>%
@@ -1642,9 +1673,9 @@ map_und_pol_cost <- rmap::map(data = map_diff_und_pol_cost,
                          animate = T)
 
 map_und_pol_cost_fin <- map_und_pol_cost$map_param_PRETTY +
-  theme(strip.text = element_text(size = 14),
+  theme(strip.text = element_text(size = 11),
         legend.position = "bottom",
-        legend.text = element_text(size = 10),
+        legend.text = element_text(size = 9),
         legend.title = element_blank())
 
 ggsave(paste0(here::here(), "/figures/map_und_Polcost.tiff"), map_und_pol_cost_fin, "tiff")
