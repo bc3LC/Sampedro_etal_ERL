@@ -1,9 +1,9 @@
 ## Sampedro_etal_Ineq_NDC-LTT
 
-**Reducing within-region inequality improves living standards and does not jeopardize achieving existing climate pledges**
+**Enhancing energy and food access through reduction of income inequality does not jeopardize the achievement of existing climate pledges**
 
 Jon Sampedro<sup>1\*</sup>, Dirk-Jan Van de Ven<sup>1</sup>, Russell Horowitz<sup>1</sup>, Clàudia Rodés-Bachs<sup>1</sup>, Iñaki Arto<sup>1</sup>, Maria Victoria Román<sup>1</sup>, Manuel Tomás<sup>1</sup>, 
-Kanishka Narayan<sup>2</sup>, Brian O’Neill<sup>2</sup>, Pralit Patel<sup>2</sup>, Stephanie Waldhoff<sup>2</sup>,
+Kanishka Narayan<sup>2</sup>, Pralit Patel<sup>2</sup>, 
 
 <sup>1 </sup> Basque Center for Climate Change, Leioa, Spain
 
@@ -12,8 +12,7 @@ Kanishka Narayan<sup>2</sup>, Brian O’Neill<sup>2</sup>, Pralit Patel<sup>2</s
 \* corresponding author:  jon.sampedro@bc3research.org
 
 ## Abstract
-Reducing within-region income inequality is a global priority that needs to be urgently addressed to promote human development and ensure global population meets basic living standards. This could potentially lead to higher energy-related emissions by lower-income consumers, creating some conflicts with climate change mitigation objectives. Using an enhanced version of the Global Change Analysis Model, we observe that differences in energy and food demand across wealthier and poorer deciles largely decrease in alternative Paris-compliant scenarios where within-region income inequality is reduced. 
-The projected higher energy demand slightly increases the regional carbon prices required by each region to achieve existing national emission targets. While these price effects are moderate and have minor effect on the achievement of the climate pledges, they would be concentrated in some developing regions, and would need to be considered to ensure that meeting climate targets do not unfairly affect lower-income consumers.       
+Reducing within-region income inequality is a global priority that must be urgently addressed to promote human development and enhance global access to energy and food. This could lead to higher energy-related emissions by lower-income consumers, potentially creating some conflicts with climate change mitigation objectives. Using an enhanced version of the Global Change Analysis Model, we simulate reductions of within-region income inequality that allow for narrowing differences in energy and food demand across deciles by 2050 in a Paris-compliant world. The energy demand increase by lower-income consumers is greater than the decline in demand by wealthier and more satiated income groups, leading to an overall rise in total demand. Nevertheless, the projected higher energy demand in the proposed more egalitarian societies only slightly increases the regional carbon prices and mitigation costs associated with the emission targets, therefore posing minimal impact on the achievement of the existing portfolio of climate pledges.      
 
 ## Code reference
 Available at Zenodo: ADD Zenodo Link
