@@ -237,13 +237,63 @@ fen.abs.check <- fen.abs %>%
          diff_Gini25_perc = (Gini25 - Baseline) / Baseline * 100,
          diff_Gini50_perc = (Gini50 - Baseline) / Baseline * 100) 
 
-ggplot(fen, aes(x = year, y = value, fill = factor(sector, levels = c("Commercial Buildings", 
-                                                                      "Residential cooling", "Residential heating", "Residential non-thermal services",
-                                                                      "Industry",
-                                                                      "Passenger transport", "International Aviation (pass)",
-                                                                      "Freight transport", "International shipping (freight)"))))+
+fen.rel.change <- bind_rows(fen.bld, fen.ind, fen.trn) %>%
+  mutate(scenario = if_else(grepl("Gini25", scenario), "Gini25", scenario),
+         scenario = if_else(grepl("Gini50", scenario), "Gini50", scenario),
+         scenario = if_else(grepl("RegGHGPol_Ineq", scenario), "Baseline", scenario)) %>%
+  group_by(scenario, year) %>%
+  summarise(value = sum(value)) %>%
+  pivot_wider(names_from = "scenario",
+              values_from = "value") %>%
+  mutate(diff_Gini25_perc = (Gini25 - Baseline) / Baseline * 100,
+         diff_Gini50_perc = (Gini50 - Baseline) / Baseline * 100) %>%
+  select(year, starts_with("diff")) %>%
+  filter(year > 2015,
+         year <= 2050) %>%
+  pivot_longer(cols = c("diff_Gini25_perc", "diff_Gini50_perc"),
+               names_to = "scenario",
+               values_to = "annual_change") %>%
+  mutate(scenario = gsub("diff_", "", scenario))  %>%
+  mutate(label = paste0(round(annual_change, 1), " %")) %>%
+  mutate(scenario = gsub("_perc", "", scenario))
+
+
+# Ensure year is numeric
+fen$year <- as.numeric(fen$year)
+
+# Calculate totals
+fen_total <- fen %>%
+  group_by(year, scenario) %>%
+  summarise(total_value = sum(value), .groups = "drop")
+
+fen_with_pct <- fen_total %>%
+  left_join(fen.rel.change, by = c("year", "scenario"))
+
+# Define width of horizontal lines (adjust if needed)
+line_width <- 0.5  # in years
+
+# Add horizontal lines for net energy per year
+ggplot(fen, aes(x = year, y = value, 
+                fill = factor(sector, levels = c("Commercial Buildings", 
+                                                 "Residential cooling", "Residential heating", "Residential non-thermal services",
+                                                 "Industry",
+                                                 "Passenger transport", "International Aviation (pass)",
+                                                 "Freight transport", "International shipping (freight)")))) +
   geom_col() +
-  facet_grid( ~ scenario) + 
+  geom_segment(data = fen_total, 
+               aes(x = year - line_width / 2, 
+                   xend = year + line_width / 2, 
+                   y = total_value, 
+                   yend = total_value), 
+               color = "black", 
+               size = 1, 
+               inherit.aes = FALSE) +
+  geom_text(data = fen_with_pct,
+            aes(x = year, y = total_value + 1, label = label),  # Adjust the y-position as needed
+            inherit.aes = FALSE,
+            size = 2.5,
+            fontface = "bold") +
+  facet_grid(~ scenario) + 
   theme_bw() +
   labs(x = "", y = "EJ") + 
   theme(legend.position = "bottom",
@@ -255,9 +305,10 @@ ggplot(fen, aes(x = year, y = value, fill = factor(sector, levels = c("Commercia
   guides(fill = guide_legend(ncol = 3)) + 
   scale_fill_manual(values = c("yellow2", 
                                "salmon", "tomato3", "tomato",
-                                "violet",
-                                 "yellowgreen","chartreuse2",
-                                "deepskyblue1", "deepskyblue3"))
+                               "violet",
+                               "yellowgreen","chartreuse2",
+                               "deepskyblue1", "deepskyblue3"))
+
 
 ggsave(paste0(here::here(), "/figures/Fen_global_sce_sct.tiff"),last_plot(), "tiff")
 
@@ -702,30 +753,92 @@ glob.food.type.abs <- getQuery(prj, "food consumption by type (specific)") %>%
          scenario = if_else(grepl("RegGHGPol_Ineq", scenario), "Baseline", scenario)) %>%
   filter(year %in% c(2015, 2030, 2050))
 
-glob.food.type.abs.check <- glob.food.type.abs %>%
-  group_by(scenario, year) %>%
+
+# -------------
+food.rel.change <- getQuery(prj, "food demand") %>%
+  separate(`gcam-consumer`, c("adj", "decile")) %>%
+  separate(input, c("adj2", "demand")) %>%
+  mutate(decile = gsub("Group", "d", decile)) %>%
+  select(scenario, region, year, decile, demand, value, Units) %>%
+  mutate(scenario = if_else(grepl("Gini25", scenario), "Gini25", scenario),
+         scenario = if_else(grepl("Gini50", scenario), "Gini50", scenario),
+         scenario = if_else(grepl("RegGHGPol_Ineq", scenario), "Baseline", scenario)) %>%
+  group_by(scenario, year, demand) %>%
   summarise(value = sum(value)) %>%
-  ungroup() %>%
   pivot_wider(names_from = "scenario",
               values_from = "value") %>%
-  mutate(diff_Gini25 = (Gini25 - Baseline),
-         diff_Gini50 = (Gini50 - Baseline),
-         diff_Gini25_perc = (Gini25 - Baseline) / Baseline * 100,
-         diff_Gini50_perc = (Gini50 - Baseline) / Baseline * 100) 
+  mutate(diff_Gini25_perc = (Gini25 - Baseline) / Baseline * 100,
+         diff_Gini50_perc = (Gini50 - Baseline) / Baseline * 100) %>%
+  select(year, demand, starts_with("diff")) %>%
+  filter(year > 2015,
+         year <= 2050) %>%
+  pivot_longer(cols = c("diff_Gini25_perc", "diff_Gini50_perc"),
+               names_to = "scenario",
+               values_to = "annual_change") %>%
+  mutate(scenario = gsub("diff_", "", scenario))  %>%
+  mutate(label = paste0(round(annual_change, 1), " %")) %>%
+  mutate(scenario = gsub("_perc", "", scenario)) %>%
+  mutate(demand = gsub("NonStaples", "Non-staples", demand))
 
 
-ggplot(glob.food.type, aes(x = year, y = value, fill = factor(subsector, levels = c(
-  
-  "Corn", "OtherGrain", "RootTuber",  "Rice", "Wheat",
-  "Fruits", "Vegetables",
-  "Legumes", "NutsSeeds",
-  "FiberCrop", "MiscCrop",
-  "OilCrop", "OilPalm", "Soybean", "SugarCrop",
-  "OtherMeat_Fish", "Beef", "Dairy", "Pork", "Poultry", "SheepGoat"
-    
-  
-))))+
+# Calculate totals
+food_total <- glob.food.type %>%
+  group_by(scenario, year, demand = sector) %>%
+  summarise(total_value = sum(value), .groups = "drop") %>%
+  filter(scenario != "Baseline") %>%
+  filter(year > 2015,
+         year <= 2050) 
+
+food_with_pct <- food_total %>%
+  left_join(food.rel.change, by = c("year", "scenario", "demand")) %>%
+  filter(complete.cases(.))
+
+# Rename 'demand' to 'sector' so it matches the faceting variable
+food_total <- food_total %>%
+  rename(sector = demand)
+
+food_with_pct <- food_with_pct %>%
+  rename(sector = demand)
+
+# Ensure levels are correct
+food_total$sector <- factor(food_total$sector, levels = c("Staples", "Non-staples"))
+food_with_pct$sector <- factor(food_with_pct$sector, levels = c("Staples", "Non-staples"))
+
+# Add groups for clarity
+food_groups <- data.frame(
+  subsector = c("Corn", "OtherGrain", "RootTuber", "Rice", "Wheat",
+                "Fruits", "Vegetables",
+                "Legumes", "NutsSeeds",
+                "FiberCrop", "MiscCrop",
+                "OilCrop", "OilPalm", "Soybean", "SugarCrop",
+                "OtherMeat_Fish", "Beef", "Dairy", "Pork", "Poultry", "SheepGoat"),
+  food_group = c(rep("Staple Grains", 5),
+                 rep("Fruit&Veg", 2),
+                 rep("Plant Protein", 2),
+                 rep("Other Crops", 2),
+                 rep("Oil Crops", 4),
+                 rep("Animal Protein", 6))
+)
+
+glob.food.type.agg <- glob.food.type %>%
+  left_join(food_groups, by = "subsector") %>%
+  group_by(scenario, year, sector, food_group) %>%
+  summarise(value = sum(value)) %>%
+  ungroup()
+
+
+#-------------
+
+ggplot(glob.food.type.agg, aes(x = year, y = value, fill = food_group)) +
   geom_col() +
+  # Text labels (% change)
+  geom_text(data = food_with_pct,
+            aes(x = year, y = total_value + 20, label = label,
+                group = interaction(sector, scenario)),
+            inherit.aes = FALSE,
+            size = 2.5,
+            fontface = "bold") +
+  
   facet_grid(factor(sector, levels = c("Staples", "Non-staples")) ~ scenario) + 
   theme_bw() +
   labs(x = "", y = "Pcal") + 
@@ -736,19 +849,28 @@ ggplot(glob.food.type, aes(x = year, y = value, fill = factor(subsector, levels 
         axis.text.x = element_text(size = 11),
         axis.text.y = element_text(size = 11),
         axis.title.y = element_text(size = 12)) + 
-  guides(fill = guide_legend(ncol = 7)) + 
-  theme(legend.key.size = unit(0.4, "cm")) +
-  scale_fill_manual(values = c("yellow1", "yellow2" , "yellow3", "gold3" ,"gold1" ,
-                               "chartreuse2","forestgreen",
-                               "orange1", "orange3",
-                               "violet",  "mediumorchid1",
-                               "deepskyblue1", "deepskyblue2","deepskyblue3", "lightblue3",
-                               "hotpink1","tomato1", "tomato2", "firebrick1", "firebrick3", "tomato3"
+  guides(fill = guide_legend(ncol = 2)) +  # Adjust columns as needed
+  theme(legend.text = element_text(size = 8)) +
+  scale_fill_manual(values = c(
+    "Staple Grains" = "yellow2",
+    "Produce" = "forestgreen",
+    "Plant Protein" = "orange",
+    "Oil Crops" = "skyblue2",
+    "Animal Protein" = "firebrick2",
+    "Other Crops" = "orchid"
+  )) + 
+  theme(
+    legend.position = "bottom",
+    legend.title = element_blank(),
+    legend.text = element_text(size = 10),
+    legend.key.size = unit(0.3, "cm")
+  ) +
+  guides(fill = guide_legend(nrow = 1)) 
 
-
-))
 
 ggsave(paste0(here::here(), "/figures/GlobFoodSub_diffSce.tiff"),last_plot(), "tiff")
+
+#----------------------
 
 
 ggplot(glob.food.type.abs, aes(x = scenario, y = value, fill = factor(subsector, levels = c(
@@ -842,6 +964,61 @@ map_food_2050 <- map_food$map_param_KMEANS +
         legend.text = element_text(size = 8))  
 
 ggsave(paste0(here::here(), "/figures/Food_map_diffSce_2050.tiff"),map_food_2050, "tiff")
+
+
+# Add percentage
+food.pct <- getQuery(prj, "food demand") %>%
+  separate(`gcam-consumer`, c("adj", "decile")) %>%
+  separate(input, c("adj2", "demand")) %>%
+  mutate(decile = gsub("Group", "d", decile)) %>%
+  select(scenario, region, year, decile, demand, value, Units) %>%
+  group_by(scenario, region, year, demand, Units) %>%
+  summarise(value = sum(value)) %>%
+  ungroup() %>%
+  mutate(scenario = if_else(grepl("Gini25", scenario), "Gini25", scenario),
+         scenario = if_else(grepl("Gini50", scenario), "Gini50", scenario),
+         scenario = if_else(grepl("RegGHGPol_Ineq", scenario), "Baseline", scenario)) %>%
+  pivot_wider(names_from = "scenario",
+              values_from = "value") %>%
+  mutate(diff_Gini25 = (Gini25 - Baseline) / Baseline * 100,
+         diff_Gini50 = (Gini50 - Baseline) / Baseline * 100) %>%
+  select(year, region, demand, Units, starts_with("diff")) %>%
+  pivot_longer(cols = c("diff_Gini25", "diff_Gini50"),
+               names_to = "scenario",
+               values_to = "value") %>%
+  mutate(scenario = gsub("diff_", "", scenario),
+         Units = "%") %>%
+  filter(year <= 2050,
+         year > 2015) %>%
+  rename(sce = scenario) %>%
+  select(sce, subRegion = region, year, demand, value, Units) %>%
+   # adjust minor solving error
+   mutate(value = if_else(subRegion == "Central Asia" &
+                            year == 2050 &
+                            demand == "NonStaples",
+                          0,
+                          value))
+
+map_food_pct <- rmap::map(data = food.pct %>% filter(year == 2050),
+                      shape = mapGCAMReg32,
+                      folder ="figures/maps/food",
+                      legendType = "pretty",
+                      palette = c('#c51b7d','#de77ae','white','#fde0ef','#e6f5d0','#b8e186','#7fbc41','#4d9221'),
+                      row = "sce",
+                      col = "demand",
+                      #legendType = "continuous",
+                      background  = T)
+
+map_food_pct_2050 <- map_food_pct$map_param_PRETTY +
+  theme(strip.text.y = element_text(size = 11),
+        strip.text.x = element_text(size = 11),
+        plot.title = element_blank(),
+        legend.position = "bottom",
+        legend.text = element_text(size = 8))  
+
+ggsave(paste0(here::here(), "/figures/Food_map_diffSce_pct_2050.tiff"),map_food_pct_2050, "tiff")
+
+
 
 #---
 # Calculate changes by food group
