@@ -1948,3 +1948,421 @@ ggplot(ghg_gas %>% filter(region %in% c("Africa_Eastern", "Africa_Northern", "In
   scale_color_manual(values = c("orange", "dodgerblue1", "forestgreen"))
 
 
+# 5 - SENSITIVITY RESULTS ----
+
+# 5.1 - RESULTS FOR THE BASELINE ----
+
+# ENERGY
+prj_base <-loadProject("Paper_inequality_base.dat")
+
+
+fen.bld_base <- getQuery(prj_base,"building final energy by service and fuel") %>%
+  mutate(sector = if_else(grepl("comm", sector), "Commercial Buildings", sector),
+         sector = if_else(grepl("resid heating", sector), "Residential heating", sector),
+         sector = if_else(grepl("resid cooling", sector), "Residential cooling", sector),
+         sector = if_else(grepl("resid other", sector), "Residential non-thermal services", sector)) %>%
+  group_by(scenario, sector, year, Units) %>%
+  summarise(value = sum(value)) %>%
+  ungroup() 
+
+fen.ind_base <- getQuery(prj_base,"industry total final energy by service") %>%
+  group_by(scenario, year, Units) %>%
+  summarise(value = sum(value)) %>%
+  ungroup() %>%
+  mutate(sector = "Industry")
+
+fen.trn_base <- getQuery(prj_base,"transport total final energy by region") %>%
+  mutate(sector = "Transport") %>%
+  group_by(scenario, sector, year, Units) %>%
+  summarise(value = sum(value)) %>%
+  ungroup() 
+
+fen_base <- bind_rows(fen.bld_base, fen.ind_base, fen.trn_base) %>%
+  mutate(scenario = if_else(grepl("Gini25", scenario), "Gini25", scenario),
+         scenario = if_else(grepl("Gini50", scenario), "Gini50", scenario),
+         scenario = if_else(grepl("Ref_SSP2", scenario), "Baseline", scenario)) %>%
+  pivot_wider(names_from = "scenario",
+              values_from = "value") %>%
+  mutate(diff_Gini25 = Gini25 - Baseline,
+         diff_Gini50 = Gini50 - Baseline) %>%
+  select(year, sector, Units, starts_with("diff")) %>%
+  pivot_longer(cols = c("diff_Gini25", "diff_Gini50"),
+               names_to = "scenario",
+               values_to = "value") %>%
+  mutate(scenario = gsub("diff_", "", scenario)) %>%
+  filter(year <= 2050,
+         year > 2015)
+
+fen.rel.change_base <- bind_rows(fen.bld_base, fen.ind_base, fen.trn_base)  %>%
+  mutate(scenario = if_else(grepl("Gini25", scenario), "Gini25", scenario),
+         scenario = if_else(grepl("Gini50", scenario), "Gini50", scenario),
+         scenario = if_else(grepl("Ref_SSP2", scenario), "Baseline", scenario)) %>%
+  group_by(scenario, year) %>%
+  summarise(value = sum(value)) %>%
+  pivot_wider(names_from = "scenario",
+              values_from = "value") %>%
+  mutate(diff_Gini25_perc = (Gini25 - Baseline) / Baseline * 100,
+         diff_Gini50_perc = (Gini50 - Baseline) / Baseline * 100) %>%
+  select(year, starts_with("diff")) %>%
+  filter(year > 2015,
+         year <= 2050) %>%
+  pivot_longer(cols = c("diff_Gini25_perc", "diff_Gini50_perc"),
+               names_to = "scenario",
+               values_to = "annual_change") %>%
+  mutate(scenario = gsub("diff_", "", scenario))  %>%
+  mutate(label = paste0(round(annual_change, 1), " %")) %>%
+  mutate(scenario = gsub("_perc", "", scenario))
+
+
+# Ensure year is numeric
+fen_base$year <- as.numeric(fen_base$year)
+
+# Calculate totals
+fen_base_total <- fen_base %>%
+  group_by(year, scenario) %>%
+  summarise(total_value = sum(value), .groups = "drop")
+
+fen_base_with_pct <- fen_base_total %>%
+  left_join(fen.rel.change_base, by = c("year", "scenario"))
+
+# Define width of horizontal lines (adjust if needed)
+line_width <- 0.5  # in years
+
+# Add horizontal lines for net energy per year
+ggplot(fen_base, aes(x = year, y = value, 
+                fill = factor(sector, levels = c("Commercial Buildings", 
+                                                 "Residential cooling", "Residential heating", "Residential non-thermal services",
+                                                 "Industry",
+                                                 "Transport")))) +
+  geom_col() +
+  geom_segment(data = fen_base_total, 
+               aes(x = year - line_width / 2, 
+                   xend = year + line_width / 2, 
+                   y = total_value, 
+                   yend = total_value), 
+               color = "black", 
+               size = 1, 
+               inherit.aes = FALSE) +
+  geom_text(data = fen_base_with_pct,
+            aes(x = year, y = total_value + 1, label = label),  # Adjust the y-position as needed
+            inherit.aes = FALSE,
+            size = 2.5,
+            fontface = "bold") +
+  facet_grid(~ scenario) + 
+  theme_bw() +
+  labs(x = "", y = "EJ") + 
+  theme(legend.position = "bottom",
+        legend.title = element_blank(),
+        strip.text = element_text(size = 11),
+        axis.text.x = element_text(size = 11),
+        axis.text.y = element_text(size = 11),
+        axis.title.y = element_text(size = 12)) + 
+  guides(fill = guide_legend(ncol = 3)) + 
+  scale_fill_manual(values = c("yellow2", 
+                               "salmon", "tomato3", "tomato",
+                               "violet",
+                               "deepskyblue1"))
+
+
+ggsave(paste0(here::here(), "/figures/Fen_base_SA.tiff"),last_plot(), "tiff")
+
+# FOOD
+staple_commodities <- c("Corn", "Rice", "RootTuber", "Wheat", "OtherGrain")
+
+glob.food.type_base <- getQuery(prj_base, "food consumption by type (specific)") %>%
+  group_by(scenario, subsector = `technology`, year, Units) %>%
+  summarise(value = sum(value)) %>%
+  ungroup() %>%
+  mutate(scenario = if_else(grepl("Gini25", scenario), "Gini25", scenario),
+         scenario = if_else(grepl("Gini50", scenario), "Gini50", scenario),
+         scenario = if_else(grepl("Ref_SSP2", scenario), "Baseline", scenario)) %>%
+  pivot_wider(names_from = "scenario",
+              values_from = "value") %>%
+  mutate(diff_Gini25 = Gini25 - Baseline,
+         diff_Gini50 = Gini50 - Baseline) %>%
+  select(year, subsector, Units, starts_with("diff")) %>%
+  pivot_longer(cols = c("diff_Gini25", "diff_Gini50"),
+               names_to = "scenario",
+               values_to = "value") %>%
+  mutate(scenario = gsub("diff_", "", scenario)) %>%
+  filter(year <= 2050,
+         year > 2015) %>%
+  mutate(sector = if_else(subsector %in% staple_commodities, "Staples", "Non-staples"))
+
+glob.food.type.sct_base <- glob.food.type_base %>%
+  group_by(scenario, sector, year, Units) %>%
+  summarise(value = sum(value)) %>% 
+  ungroup()
+
+
+food.rel.change_base <- getQuery(prj_base, "food consumption by type (specific)") %>%
+  mutate(sector = if_else(technology %in% staple_commodities, "Staples", "Non-staples")) %>%
+  group_by(scenario, sector, year, Units) %>%
+  summarise(value = sum(value)) %>%
+  ungroup() %>%
+  mutate(scenario = if_else(grepl("Gini25", scenario), "Gini25", scenario),
+         scenario = if_else(grepl("Gini50", scenario), "Gini50", scenario),
+         scenario = if_else(grepl("Ref_SSP2", scenario), "Baseline", scenario)) %>%
+  pivot_wider(names_from = "scenario",
+              values_from = "value") %>%
+  mutate(diff_Gini25_perc = (Gini25 - Baseline) / Baseline * 100,
+         diff_Gini50_perc = (Gini50 - Baseline) / Baseline * 100) %>%
+  select(year, sector, starts_with("diff")) %>%
+  filter(year > 2015,
+         year <= 2050) %>%
+  pivot_longer(cols = c("diff_Gini25_perc", "diff_Gini50_perc"),
+               names_to = "scenario",
+               values_to = "annual_change") %>%
+  mutate(scenario = gsub("diff_", "", scenario))  %>%
+  mutate(label = paste0(round(annual_change, 1), " %")) %>%
+  mutate(scenario = gsub("_perc", "", scenario)) 
+
+
+# Calculate totals
+food_total_base <- glob.food.type_base %>%
+  group_by(scenario, year, demand = sector) %>%
+  summarise(total_value = sum(value), .groups = "drop") %>%
+  filter(scenario != "Baseline") %>%
+  filter(year > 2015,
+         year <= 2050) %>%
+  rename(sector = demand) 
+
+food_with_pct_base <- food_total_base %>%
+  left_join(food.rel.change_base, by = c("year", "scenario", "sector")) %>%
+  filter(complete.cases(.))
+
+
+# Ensure levels are correct
+food_total_base$sector <- factor(food_total_base$sector, levels = c("Staples", "Non-staples"))
+food_with_pct_base$sector <- factor(food_with_pct_base$sector, levels = c("Staples", "Non-staples"))
+glob.food.type.sct_base$sector <- factor(glob.food.type.sct_base$sector, levels = c("Staples", "Non-staples"))
+
+
+ggplot(glob.food.type.sct_base, aes(x = year, y = value, fill = sector)) +
+  geom_col() +
+  facet_grid(sector ~ scenario) + 
+  theme_bw() +
+  # Text labels (% change)
+  geom_text(data = food_with_pct_base,
+            aes(x = year, y = total_value + 20, label = label,
+                group = interaction(sector, scenario)),
+            inherit.aes = FALSE,
+            size = 2.5,
+            fontface = "bold") +
+  labs(x = "", y = "Pcal") + 
+  theme(legend.position = "bottom",
+        legend.title = element_blank(),
+        legend.text = element_text(size = 8),
+        strip.text = element_text(size = 11),
+        axis.text.x = element_text(size = 11),
+        axis.text.y = element_text(size = 11),
+        axis.title.y = element_text(size = 12)) + 
+  guides(fill = guide_legend(ncol = 2)) +  # Adjust columns as needed
+  theme(legend.text = element_text(size = 8)) +
+  scale_fill_manual(values = c(
+    "Staples" = "yellow2",
+    "Non-staples" = "orange"
+  )) + 
+  theme(
+    legend.position = "bottom",
+    legend.title = element_blank(),
+    legend.text = element_text(size = 12),
+    legend.key.size = unit(0.3, "cm")
+  ) +
+  guides(fill = guide_legend(nrow = 1)) 
+
+
+ggsave(paste0(here::here(), "/figures/GlobFoodSub_SA.tiff"),last_plot(), "tiff")
+
+# EMISSIONS
+em_base <- getQuery(prj_base, "CO2 emissions by region") %>%
+  mutate(scenario = if_else(grepl("Gini25", scenario), "Gini25", scenario),
+         scenario = if_else(grepl("Gini50", scenario), "Gini50", scenario),
+         scenario = if_else(grepl("Ref_SSP2", scenario), "Baseline", scenario)) %>%
+  filter(year <= 2050,
+         year > 2015) %>%
+  group_by(scenario, year, Units) %>%
+  summarise(value = sum(value)) %>%
+  ungroup()
+
+
+em_diff_base <- getQuery(prj_base, "CO2 emissions by region") %>%
+  mutate(scenario = if_else(grepl("Gini25", scenario), "Gini25", scenario),
+         scenario = if_else(grepl("Gini50", scenario), "Gini50", scenario),
+         scenario = if_else(grepl("Ref_SSP2", scenario), "Baseline", scenario)) %>%
+  pivot_wider(names_from = "scenario",
+              values_from = "value") %>%
+  mutate(diff_Gini25 = Gini25 - Baseline,
+         diff_Gini50 = Gini50 - Baseline) %>%
+  select(year, Units, starts_with("diff")) %>%
+  pivot_longer(cols = c("diff_Gini25", "diff_Gini50"),
+               names_to = "scenario",
+               values_to = "value") %>%
+  mutate(scenario = gsub("diff_", "", scenario)) %>%
+  filter(year <= 2050,
+         year > 2015)
+
+ggplot(em_base, aes(x = year, y = value, color = scenario)) +
+  geom_line(size = 1.2) +                              
+  geom_point(size = 2) +                                
+  theme_bw(base_size = 12) +                           
+  labs(x = "", y = "MTC") + 
+  scale_color_manual(values = c("orange", "dodgerblue1", "forestgreen")) +
+  scale_x_continuous(breaks = seq(min(em_base$year), max(em_base$year), by = 5),
+                     expand = expansion(mult = c(0.01, 0.05))) + 
+  scale_y_continuous(expand = expansion(mult = c(0, 0.05))) +
+  theme(
+    legend.position = "bottom",
+    legend.title = element_blank(),
+    legend.text = element_text(size = 11),
+    legend.key.size = unit(0.5, "cm"),
+    axis.text.x = element_text(size = 11),
+    axis.text.y = element_text(size = 11),
+    axis.title.y = element_text(size = 13),
+    panel.grid.minor = element_blank(),               
+    panel.grid.major.x = element_blank()             
+  ) +
+  guides(color = guide_legend(nrow = 1)) 
+
+ggsave(paste0(here::here(), "/figures/GlobEm_SA.tiff"),last_plot(), "tiff")
+
+
+# 5.2 - MULTISCENARIO ANALYSIS ----
+prj_sa <- loadProject("Paper_inequality_sa.dat")
+
+gini_rg_sa <- read.csv("./data/Rao_multimodel_income_deciles.csv")%>%
+  select(GCAM_region_ID, year, model, sce, gini) %>%
+  filter(model %in% c("PCA algorithm (Two Components)", "Lognormal functional form")) %>%
+  mutate(model = if_else(model == "PCA algorithm (Two Components)", "SA_PCA", "SA_LogNorm"),
+         scenario = paste0(model, "_", sce)) %>%
+  select(GCAM_region_ID, year, scenario, gini) %>%
+  distinct() %>%
+  arrange(GCAM_region_ID, year) %>%
+  as_tibble() %>%
+  left_join_error_no_match(
+    read.csv(
+      "./data/map_GCAM_reg.csv"
+    ) %>%
+      select(GCAM_region_ID, region)
+    , by = c("GCAM_region_ID")) %>%
+  filter(year <= 2050,
+         year > 2015)
+
+gini_globAvg_sa <- gini_rg_sa %>%
+  group_by(scenario, year) %>%
+  summarise(gini = mean(gini)) %>%
+  ungroup()
+
+
+fen.bld_sa <- getQuery(prj_sa,"building final energy by service and fuel") %>%
+  group_by(scenario, region, year, Units) %>%
+  summarise(value = sum(value)) %>%
+  ungroup() %>%
+  filter(year <= 2050,
+         year > 2015)
+
+fen.ind_sa <- getQuery(prj_sa,"industry total final energy by service") %>%
+  group_by(scenario, region, year, Units) %>%
+  summarise(value = sum(value)) %>%
+  ungroup() %>%
+  filter(year <= 2050,
+         year > 2015)
+
+fen.trn_sa<- getQuery(prj_sa,"transport total final energy by region") %>%
+  group_by(scenario, region, year, Units) %>%
+  summarise(value = sum(value)) %>%
+  ungroup() %>%
+  filter(year <= 2050,
+         year > 2015)
+
+fen_sa<- bind_rows(fen.bld_sa, fen.ind_sa, fen.trn_sa) %>%
+  group_by(scenario, region, year, Units) %>%
+  summarise(value = sum(value)) %>%
+  ungroup() 
+
+cprice_sa <- getQuery(prj_sa, "CO2 prices") %>%
+  filter(market == "globalCO2",
+         year <= 2050,
+         year > 2015)
+
+data_rg_gini_en <- left_join_error_no_match(
+  gini_rg_sa,
+  fen_sa,
+  by = c("year", "scenario", "region")
+) %>%
+  rename(tfe = value)
+
+data_glob_gini_cPrice <- 
+  left_join_error_no_match(
+    gini_globAvg_sa,
+    cprice_sa,
+    by = c("year", "scenario")
+  ) %>%
+  rename(cprice = value)
+
+# Plot Gini - TFE (rg)
+sel_regions_gini_en <- c("Africa_Eastern","Brazil", "China", 
+                         "EU-15", "India", "Japan",
+                         "Russia","South Asia", "USA")
+
+ggplot(
+  data_rg_gini_en %>%
+    filter(year == 2050, region %in% sel_regions_gini_en),
+  aes(x = gini, y = tfe)
+) +
+  geom_point(aes(color = region), size = 2.5, alpha = 0.7) +
+  geom_smooth(method = "lm", se = FALSE, color = "black", linetype = "dashed") +
+  facet_wrap(~ region, scales = "free") +
+  theme_bw(base_size = 13) +
+  labs(
+    x = "Gini Index (reverse)",
+    y = "TFE (EJ)",
+  ) +
+  theme(
+    legend.position = "none",
+    strip.background = element_rect(fill = "grey90", color = NA),
+    strip.text = element_text(size = 12),
+    axis.text.x = element_text(size = 11),
+    axis.text.y = element_text(size = 10),
+    axis.title = element_text(size = 13),
+    panel.grid.minor = element_blank(),
+    panel.grid.major.x = element_blank()) + 
+  scale_x_reverse()
+  
+ggsave(paste0(here::here(), "/figures/Gini_TFE_reg_SA.tiff"),last_plot(), "tiff")
+
+
+# Plot Gini - CPrice (global)
+ggplot(
+  data_glob_gini_cPrice %>% filter(year != 2020),
+  aes(x = gini, y = cprice)
+) +
+  facet_wrap(~ year, scales = "free") +
+  geom_point(aes(color = region), size = 2.5, alpha = 0.7) +
+  geom_smooth(method = "lm", se = FALSE, color = "black", linetype = "dashed") +
+  theme_bw(base_size = 13) +
+  labs(
+    x = "Gini Index",
+    y = "Cprice ($1990/tc)",
+  ) +
+  theme(
+    legend.position = "none",
+    strip.background = element_rect(fill = "grey90", color = NA),
+    strip.text = element_text(size = 12),
+    axis.text.x = element_text(size = 11),
+    axis.text.y = element_text(size = 10),
+    axis.title = element_text(size = 13),
+    panel.grid.minor = element_blank(),
+    panel.grid.major.x = element_blank()) + 
+  scale_x_reverse()
+
+ggsave(paste0(here::here(), "/figures/Gini_cPrice_glob_SA.tiff"),last_plot(), "tiff")
+
+
+
+
+
+
+
+
+
