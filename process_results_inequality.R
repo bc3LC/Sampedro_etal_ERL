@@ -105,6 +105,40 @@ ggplot(shares %>%
 
 ggsave(paste0(here::here(), "/figures/IncShares_sce_selectedGCAMReg_2050.tiff"),last_plot(), "tiff")
 
+# Add table with Gini reductions
+gini_table_base <- read.csv(paste0(here::here(), "/data/Rao_multimodel_income_deciles.csv")) %>% 
+  filter(year == 2015) %>%
+  left_join(gcam_regions, by = join_by(GCAM_region_ID)) %>%
+  select(region, year, gini) %>%
+  distinct() %>%
+  mutate(scenario = "Baseline")
+
+
+gini_table <- shares %>%
+  select(scenario = model, region, year, gini) %>%
+  distinct() %>%
+  arrange(scenario, region, year) %>%
+  bind_rows(
+    gini_table_base
+  ) %>%
+  filter(year %in% c(2015, 2050)) %>%
+  pivot_wider(names_from = "year",
+              values_from = "gini") %>%
+  mutate(diff_Gini = `2050` - `2015`) %>%
+  select(scenario, region, diff_Gini) %>%
+  filter(scenario != "Baseline") %>%
+  pivot_wider(names_from = "scenario",
+              values_from = "diff_Gini") %>%
+  rename(diff_Gini25 = Gini25,
+         diff_Gini50 = Gini50) %>%
+  mutate(region = gsub("_", " ", region),
+         region = if_else(region == "Central America and Caribbean", "CAC", region),
+         region = if_else(region == "European Free Trade Association", "EFTA", region))
+
+write.csv(gini_table, "./data/gini_table.csv", row.names = F)
+  
+
+
 #---
 # 0.3: Check how the Gini reduction erradicate poverty and extreme poverty  ----
 pov <- read.csv(paste0(here::here(), "/data/poverty.csv")) %>%
