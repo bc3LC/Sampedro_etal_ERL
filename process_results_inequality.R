@@ -127,6 +127,7 @@ gini_table <- shares %>%
   mutate(diff_Gini = `2050` - `2015`) %>%
   select(scenario, region, diff_Gini) %>%
   filter(scenario != "Baseline") %>%
+  mutate(diff_Gini = round(diff_Gini, 2)) %>%
   pivot_wider(names_from = "scenario",
               values_from = "diff_Gini") %>%
   rename(diff_Gini25 = Gini25,
@@ -887,7 +888,7 @@ ggplot(glob.food.type.agg, aes(x = year, y = value, fill = food_group)) +
   theme(legend.text = element_text(size = 8)) +
   scale_fill_manual(values = c(
     "Staple Grains" = "yellow2",
-    "Produce" = "forestgreen",
+    "Fruit&Veg" = "forestgreen",
     "Plant Protein" = "orange",
     "Oil Crops" = "skyblue2",
     "Animal Protein" = "firebrick2",
@@ -1891,6 +1892,43 @@ map_und_pol_cost_fin <- map_und_pol_cost$map_param_PRETTY +
 
 ggsave(paste0(here::here(), "/figures/map_und_Polcost.tiff"), map_und_pol_cost_fin, "tiff")
 
+
+# 4.3 Non-CO2 ----
+selected_pollutants <- c("BC", "CH4", "CO", "N2O", "NH3", "NMVOC","NOx", "OC", "SO2")
+
+
+em <- getQuery(prj, "nonCO2 emissions by region") %>%
+  mutate(scenario = if_else(grepl("Gini25", scenario), "Gini25", scenario),
+         scenario = if_else(grepl("Gini50", scenario), "Gini50", scenario),
+         scenario = if_else(grepl("RegGHGPol_Ineq", scenario), "Baseline", scenario)) %>%
+  separate(ghg, c("ghg", "adj"), sep = "_") %>%
+  mutate(ghg = if_else(grepl("HFC", ghg), "HFC", ghg)) %>%
+  group_by(scenario, ghg, year, Units) %>%
+  summarise(value = sum(value)) %>%
+  ungroup() %>%
+  filter(ghg %in% selected_pollutants,
+         year >= 2015,
+         year <= 2050)
+
+ggplot(em, aes(x = year, y = value, colour = scenario)) + 
+  geom_line() + 
+  theme_bw() + 
+  facet_wrap(~ ghg, scales = "free") + 
+  labs(x = "", y = "Tg") + 
+  scale_color_manual(values = c("orange","dodgerblue1", "forestgreen")) + 
+  theme(
+    legend.position = "bottom",         # move legend below plot
+    legend.title = element_blank(),
+    legend.text = element_text(size = 13),
+    axis.text = element_text(size = 12, color = "black"),
+    axis.title = element_text(size = 14),
+    strip.text = element_text(size = 13),
+    panel.grid.minor = element_blank()
+  )
+
+ggsave(paste0(here::here(), "/figures/glob_em.tiff"), last_plot(), "tiff")
+
+
 # =======================================================================
 # Check emission increases with CPrices ----
 
@@ -2099,6 +2137,56 @@ ggplot(fen_base, aes(x = year, y = value,
 
 
 ggsave(paste0(here::here(), "/figures/Fen_base_SA.tiff"),last_plot(), "tiff")
+
+# Primary energy Diff
+
+en_base <- getQuery(prj_base, "primary energy consumption with CCS by region (direct equivalent)") %>%
+  filter(fuel != "regional biomass") %>%
+  mutate(scenario = if_else(grepl("Gini25", scenario), "Gini25", scenario),
+         scenario = if_else(grepl("Gini50", scenario), "Gini50", scenario),
+         scenario = if_else(grepl("Ref_SSP2_Ineq", scenario), "Baseline", scenario)) %>%
+  pivot_wider(names_from = "scenario",
+              values_from = "value") %>%
+  mutate(diff_Gini25 = Gini25 - Baseline,
+         diff_Gini50 = Gini50 - Baseline) %>%
+  select(year, region, fuel, Units, starts_with("diff")) %>%
+  pivot_longer(cols = c("diff_Gini25", "diff_Gini50"),
+               names_to = "scenario",
+               values_to = "value") %>%
+  mutate(scenario = gsub("diff_", "", scenario)) %>%
+  filter(year <= 2050,
+         year > 2015) %>%
+  left_join_error_no_match(read.csv("data/map_GCAM_reg.csv"), by = join_by(region)) %>%
+  group_by(scenario, region_agg, fuel, year, Units) %>%
+  summarise(value = sum(value)) %>%
+  ungroup() %>%
+  rename(region = region_agg) 
+
+techs = c("a oil","a oil CCS","b natural gas","b natural gas CCS","c coal","c coal CCS",
+          "d biomass","d biomass CCS","e nuclear","f hydro","g wind","h solar","i geothermal",
+          "j traditional biomass")
+
+my_pal_energy = jgcricolors::jgcricol()$pal_all
+
+ggplot(en_base %>% filter(year == 2050), aes(x = region, y = value, fill = fuel)) +
+  geom_col() +
+  facet_grid( ~ scenario) + 
+  theme_bw() + 
+  labs(x = "", y = "EJ") + 
+  theme(legend.position = "right",
+        legend.title = element_blank(),
+        strip.text = element_text(size = 10),
+        axis.text.x = element_text(size = 7, angle = 90, hjust = 1, vjust = .5),
+        axis.text.y = element_text(size = 11),
+        axis.title.y = element_text(size = 12)) + 
+  scale_fill_manual(values = my_pal_energy[names(my_pal_energy) %in% techs]) 
+
+ggsave(paste0(here::here(), "/figures/En_sce_fuel_2050_base.tiff"),last_plot(), "tiff")
+
+
+
+#---------------------------------
+
 
 # FOOD
 staple_commodities <- c("Corn", "Rice", "RootTuber", "Wheat", "OtherGrain")
