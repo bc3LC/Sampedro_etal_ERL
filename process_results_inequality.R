@@ -2294,7 +2294,7 @@ ggplot(glob.food.type.sct_base, aes(x = year, y = value, fill = sector)) +
   guides(fill = guide_legend(nrow = 1)) 
 
 
-ggsave(paste0(here::here(), "/figures/GlobFoodSub_SA.tiff"),last_plot(), "tiff")
+ggsave(paste0(here::here(), "/figures/GlobFoodSub_Base_SA.tiff"),last_plot(), "tiff")
 
 # EMISSIONS
 em_base <- getQuery(prj_base, "CO2 emissions by region") %>%
@@ -2346,7 +2346,7 @@ ggplot(em_base, aes(x = year, y = value, color = scenario)) +
   ) +
   guides(color = guide_legend(nrow = 1)) 
 
-ggsave(paste0(here::here(), "/figures/GlobEm_SA.tiff"),last_plot(), "tiff")
+ggsave(paste0(here::here(), "/figures/GlobEm_base_SA.tiff"),last_plot(), "tiff")
 
 
 # 5.2 - MULTISCENARIO ANALYSIS ----
