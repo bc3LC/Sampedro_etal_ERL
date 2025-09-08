@@ -126,12 +126,9 @@ gini_table <- shares %>%
               values_from = "gini") %>%
   mutate(diff_Gini = `2050` - `2015`) %>%
   select(scenario, region, diff_Gini) %>%
-  filter(scenario != "Baseline") %>%
   mutate(diff_Gini = round(diff_Gini, 2)) %>%
   pivot_wider(names_from = "scenario",
               values_from = "diff_Gini") %>%
-  rename(diff_Gini25 = Gini25,
-         diff_Gini50 = Gini50) %>%
   mutate(region = gsub("_", " ", region),
          region = if_else(region == "Central America and Caribbean", "CAC", region),
          region = if_else(region == "European Free Trade Association", "EFTA", region))
@@ -256,6 +253,88 @@ map_pov_2050 <- map_povx$map_param_FIXED +
         legend.text = element_text(size = 8))
 
 ggsave(paste0(here::here(), "/figures/Poverty_GCAMReg_2050.tiff"),last_plot(), "tiff")
+
+# Add tables SSP
+gini_sce <- shares %>%
+  select(scenario = model, region, year, gini) %>%
+  distinct() %>%
+  arrange(scenario, region, year) %>%
+  bind_rows(
+    gini_table_base
+  ) %>%
+  filter(year %in% c(2015, 2050)) %>%
+  pivot_wider(names_from = "year",
+              values_from = "gini") %>%
+  mutate(diff_Gini = `2050` - `2015`) %>%
+  select(scenario, region, diff_Gini) %>%
+  mutate(diff_Gini = round(diff_Gini, 2)) %>%
+  pivot_wider(names_from = "scenario",
+              values_from = "diff_Gini") %>%
+  select(-Baseline) %>%
+  pivot_longer(cols = c("Gini25", "Gini50"),
+               names_to = "ssp",
+               values_to = "value") %>%
+  rename(subRegion = region)
+
+
+gini_ssp_base <- read.csv(paste0(here::here(), "/data/Rao_multimodel_income_deciles.csv")) %>% 
+  filter(year == 2015) %>%
+  left_join(gcam_regions, by = join_by(GCAM_region_ID)) %>%
+  select(region, year, gini) %>%
+  distinct() %>%
+  as_tibble() %>%
+  repeat_add_columns(tibble(scenario =  c("Baseline", "Gini25", "Gini50"))) %>%
+  repeat_add_columns(tibble(sce =  c("SSP1", "SSP2", "SSP3", "SSP4", "SSP5")))
+
+
+gini_ssp <- tibble::as_tibble(bind_rows(
+  read.csv(paste0(here::here(), "/data/Rao_multimodel_income_deciles.csv")) %>%
+    filter(model == "PCA algorithm (Two Components)") %>%
+    mutate(model = "Baseline"),
+  read.csv(paste0(here::here(), "/data/GiniRed_25pct.csv")),
+  read.csv(paste0(here::here(), "/data/GiniRed_50pct.csv"))
+)) %>%
+  left_join(gcam_regions, by = join_by(GCAM_region_ID)) %>%
+  filter(complete.cases(.)) %>%
+  select(scenario = model, sce, region, year, gini) %>%
+  distinct() %>%
+  filter(year == 2050) %>%
+  bind_rows(
+    gini_ssp_base
+  ) %>%
+  pivot_wider(names_from = "year",
+              values_from = "gini") %>%
+  mutate(diff_Gini = `2050` - `2015`) %>%
+  select(sce = scenario, ssp = sce, subRegion = region, value = diff_Gini) %>%
+  mutate(value = round(value, 2)) %>%
+  filter(sce == "Baseline") %>%
+  select(-sce) %>%
+  bind_rows(
+    gini_sce
+  )
+  
+
+gini_ssp$ssp <- factor(gini_ssp$ssp,
+                       levels = c("Gini25", "Gini50", 
+                                  "SSP1", "SSP2", "SSP3", "SSP4", "SSP5"))
+
+map_giniDiff_ssp <- rmap::map(
+  data = gini_ssp,
+  shape = mapGCAMReg32,
+  folder = "figures/maps/giniDiffSSP",
+  col = "ssp",
+  palette = palette_div,
+  legendType = "pretty",
+  background = TRUE
+)
+
+
+map_giniDiff_SSP_fin <- map_giniDiff_ssp$map_param_PRETTY + 
+  facet_wrap(~ssp, ncol = 2, drop = FALSE) + 
+  theme( legend.position = "bottom", legend.text = element_text(size = 10) ) +
+  guides(fill = guide_legend(nrow = 2, byrow = TRUE))
+
+ggsave(paste0(here::here(), "/figures/GiniDiff_2050.png"),map_giniDiff_SSP_fin, "png")
 
 # =====================================================
 # RESULTS PROCESSING
