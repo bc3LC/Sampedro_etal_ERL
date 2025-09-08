@@ -1,33 +1,33 @@
-"region","diff_Gini25","diff_Gini50"
-"Africa Eastern",-0.15,-0.26
-"Africa Northern",-0.09,-0.17
-"Africa Southern",-0.21,-0.31
-"Africa Western",-0.1,-0.19
-"Argentina",-0.12,-0.22
-"Australia NZ",-0.1,-0.19
-"Brazil",-0.13,-0.26
-"Canada",-0.09,-0.17
-"CAC",-0.12,-0.2
-"Central Asia",-0.07,-0.11
-"China",-0.1,-0.21
-"Colombia",-0.13,-0.26
-"EU-12",-0.08,-0.15
-"EU-15",-0.08,-0.16
-"Europe Eastern",-0.09,-0.15
-"Europe Non EU",-0.12,-0.23
-"EFTA",-0.09,-0.16
-"India",-0.13,-0.25
-"Indonesia",-0.11,-0.22
-"Japan",-0.1,-0.19
-"Mexico",-0.12,-0.25
-"Middle East",-0.11,-0.2
-"Pakistan",-0.09,-0.17
-"Russia",-0.1,-0.19
-"South Africa",-0.16,-0.32
-"South America Northern",-0.1,-0.2
-"South America Southern",-0.11,-0.2
-"South Asia",-0.11,-0.21
-"South Korea",-0.09,-0.17
-"Southeast Asia",-0.07,-0.13
-"Taiwan",-0.08,-0.16
-"USA",-0.13,-0.25
+region,Baseline,Gini25,Gini50
+Africa Eastern,-0.08,-0.15,-0.26
+Africa Northern,-0.03,-0.09,-0.17
+Africa Southern,-0.08,-0.21,-0.31
+Africa Western,-0.07,-0.1,-0.19
+Argentina,-0.02,-0.12,-0.22
+Australia NZ,0.01,-0.1,-0.19
+Brazil,0.01,-0.13,-0.26
+Canada,0.05,-0.09,-0.17
+CAC,-0.05,-0.12,-0.2
+Central Asia,-0.11,-0.07,-0.11
+China,-0.04,-0.1,-0.21
+Colombia,0.02,-0.13,-0.26
+EU-12,0.04,-0.08,-0.15
+EU-15,0.01,-0.08,-0.16
+Europe Eastern,-0.03,-0.09,-0.15
+Europe Non EU,0.02,-0.12,-0.23
+EFTA,0,-0.09,-0.16
+India,0.13,-0.13,-0.25
+Indonesia,-0.02,-0.11,-0.22
+Japan,0.01,-0.1,-0.19
+Mexico,-0.1,-0.12,-0.25
+Middle East,-0.05,-0.11,-0.2
+Pakistan,-0.03,-0.09,-0.17
+Russia,0.03,-0.1,-0.19
+South Africa,-0.02,-0.16,-0.32
+South America Northern,-0.02,-0.1,-0.2
+South America Southern,-0.01,-0.11,-0.2
+South Asia,-0.03,-0.11,-0.21
+South Korea,-0.02,-0.09,-0.17
+Southeast Asia,-0.06,-0.07,-0.13
+Taiwan,-0.02,-0.08,-0.16
+USA,0.05,-0.13,-0.25

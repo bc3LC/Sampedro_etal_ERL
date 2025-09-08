@@ -137,9 +137,84 @@ gini_table <- shares %>%
          region = if_else(region == "European Free Trade Association", "EFTA", region))
 
 write.csv(gini_table, "./data/gini_table.csv", row.names = F)
-  
 
 
+# Add figure
+gini_fig <- shares %>%
+  filter(year <= 2050,
+         year >2015) %>%
+  select(-category, -shares, -sce, -GCAM_region_ID) %>%
+  bind_rows(
+    read.csv(paste0(here::here(), "/data/Rao_multimodel_income_deciles.csv")) %>% 
+      filter(year == 2015) %>%
+      left_join(gcam_regions, by = join_by(GCAM_region_ID)) %>%
+      select(region, year, gini) %>%
+      distinct() %>%
+      as_tibble() %>%
+      repeat_add_columns(tibble(model = c("Baseline", "Gini25", "Gini50")))
+  ) %>%
+  distinct() 
+
+ggplot(gini_fig %>%   
+         mutate(region = gsub("_", " ", region)), 
+       aes(x = year,
+           y = gini, 
+           color = factor(model, levels = c("Baseline", "Gini25", "Gini50")))) +
+  geom_line(size = 0.8) + 
+  geom_point(size = 1.5) + 
+  facet_wrap(~region, ncol = 4) + 
+  theme_bw() + 
+  labs(x = "", y = "Gini") + 
+  theme(
+    legend.position = "bottom",
+    legend.title = element_blank(),
+    strip.text = element_text(size = 10,),
+    legend.text = element_text(size = 11),
+    axis.text.x = element_text(size = 10),
+    axis.text.y = element_text(size = 9),
+    axis.title.y = element_text(size = 11),
+    panel.spacing = unit(0.5, "lines")
+  ) + 
+  scale_color_manual(values = c("orange","dodgerblue1", "forestgreen"))
+
+
+# Add map 
+gini_table_map <- shares %>%
+  select(scenario = model, region, year, gini) %>%
+  distinct() %>%
+  arrange(scenario, region, year) %>%
+  bind_rows(
+    gini_table_base
+  ) %>%
+  filter(year %in% c(2015, 2050)) %>%
+  pivot_wider(names_from = "year",
+              values_from = "gini") %>%
+  mutate(diff_Gini = `2050` - `2015`) %>%
+  select(scenario, subRegion = region, diff_Gini) %>%
+  mutate(diff_Gini = round(diff_Gini, 2)) %>%
+  pivot_wider(names_from = "scenario",
+              values_from = "diff_Gini") %>%
+  pivot_longer(cols = c("Baseline","Gini25", "Gini50"),
+               names_to = "scenario",
+               values_to = "value") 
+
+palette_div <- c('#1a9850','#66bd63','#a6d96a','#d9ef8b',"white",'#fdae61','#f46d43')
+
+map_giniDiff <- rmap::map(
+  data = gini_table_map,
+  shape = mapGCAMReg32,
+  folder = "figures/maps/giniDiff",
+  palette = palette_div,
+  legendType = "pretty",
+  background = TRUE
+)
+
+
+map_giniDiff_fin <- map_giniDiff$map_param_PRETTY + 
+  theme(legend.position = "bottom", 
+         legend.text = element_text(size = 10) )
+
+ggsave("figures/maps/giniDiff/map_giniDiff_fin.png", map_giniDiff_fin, width = 10, height = 6)
 #---
 # 0.3: Check how the Gini reduction erradicate poverty and extreme poverty  ----
 pov <- read.csv(paste0(here::here(), "/data/poverty.csv")) %>%
@@ -2055,10 +2130,10 @@ fen_base <- bind_rows(fen.bld_base, fen.ind_base, fen.trn_base) %>%
          scenario = if_else(grepl("Ref_SSP2", scenario), "Baseline", scenario)) %>%
   pivot_wider(names_from = "scenario",
               values_from = "value") %>%
-  mutate(diff_Gini25 = Gini25 - Baseline,
-         diff_Gini50 = Gini50 - Baseline) %>%
+  mutate(diff_Gini25_NoClimPol = Gini25 - Baseline,
+         diff_Gini50_NoClimPol = Gini50 - Baseline) %>%
   select(year, sector, Units, starts_with("diff")) %>%
-  pivot_longer(cols = c("diff_Gini25", "diff_Gini50"),
+  pivot_longer(cols = c("diff_Gini25_NoClimPol", "diff_Gini50_NoClimPol"),
                names_to = "scenario",
                values_to = "value") %>%
   mutate(scenario = gsub("diff_", "", scenario)) %>%
@@ -2073,12 +2148,12 @@ fen.rel.change_base <- bind_rows(fen.bld_base, fen.ind_base, fen.trn_base)  %>%
   summarise(value = sum(value)) %>%
   pivot_wider(names_from = "scenario",
               values_from = "value") %>%
-  mutate(diff_Gini25_perc = (Gini25 - Baseline) / Baseline * 100,
-         diff_Gini50_perc = (Gini50 - Baseline) / Baseline * 100) %>%
+  mutate(diff_Gini25_NoClimPol_perc = (Gini25 - Baseline) / Baseline * 100,
+         diff_Gini50_NoClimPol_perc = (Gini50 - Baseline) / Baseline * 100) %>%
   select(year, starts_with("diff")) %>%
   filter(year > 2015,
          year <= 2050) %>%
-  pivot_longer(cols = c("diff_Gini25_perc", "diff_Gini50_perc"),
+  pivot_longer(cols = c("diff_Gini25_NoClimPol_perc", "diff_Gini50_NoClimPol_perc"),
                names_to = "scenario",
                values_to = "annual_change") %>%
   mutate(scenario = gsub("diff_", "", scenario))  %>%
@@ -2147,10 +2222,10 @@ en_base <- getQuery(prj_base, "primary energy consumption with CCS by region (di
          scenario = if_else(grepl("Ref_SSP2_Ineq", scenario), "Baseline", scenario)) %>%
   pivot_wider(names_from = "scenario",
               values_from = "value") %>%
-  mutate(diff_Gini25 = Gini25 - Baseline,
-         diff_Gini50 = Gini50 - Baseline) %>%
+  mutate(diff_Gini25_NoClimPol = Gini25 - Baseline,
+         diff_Gini50_NoClimPol = Gini50 - Baseline) %>%
   select(year, region, fuel, Units, starts_with("diff")) %>%
-  pivot_longer(cols = c("diff_Gini25", "diff_Gini50"),
+  pivot_longer(cols = c("diff_Gini25_NoClimPol", "diff_Gini50_NoClimPol"),
                names_to = "scenario",
                values_to = "value") %>%
   mutate(scenario = gsub("diff_", "", scenario)) %>%
@@ -2200,10 +2275,10 @@ glob.food.type_base <- getQuery(prj_base, "food consumption by type (specific)")
          scenario = if_else(grepl("Ref_SSP2", scenario), "Baseline", scenario)) %>%
   pivot_wider(names_from = "scenario",
               values_from = "value") %>%
-  mutate(diff_Gini25 = Gini25 - Baseline,
-         diff_Gini50 = Gini50 - Baseline) %>%
+  mutate(diff_Gini25_NoClimPol = Gini25 - Baseline,
+         diff_Gini50_NoClimPol = Gini50 - Baseline) %>%
   select(year, subsector, Units, starts_with("diff")) %>%
-  pivot_longer(cols = c("diff_Gini25", "diff_Gini50"),
+  pivot_longer(cols = c("diff_Gini25_NoClimPol", "diff_Gini50_NoClimPol"),
                names_to = "scenario",
                values_to = "value") %>%
   mutate(scenario = gsub("diff_", "", scenario)) %>%
@@ -2227,12 +2302,12 @@ food.rel.change_base <- getQuery(prj_base, "food consumption by type (specific)"
          scenario = if_else(grepl("Ref_SSP2", scenario), "Baseline", scenario)) %>%
   pivot_wider(names_from = "scenario",
               values_from = "value") %>%
-  mutate(diff_Gini25_perc = (Gini25 - Baseline) / Baseline * 100,
-         diff_Gini50_perc = (Gini50 - Baseline) / Baseline * 100) %>%
+  mutate(diff_Gini25_NoClimPol_perc = (Gini25 - Baseline) / Baseline * 100,
+         diff_Gini50_NoClimPol_perc = (Gini50 - Baseline) / Baseline * 100) %>%
   select(year, sector, starts_with("diff")) %>%
   filter(year > 2015,
          year <= 2050) %>%
-  pivot_longer(cols = c("diff_Gini25_perc", "diff_Gini50_perc"),
+  pivot_longer(cols = c("diff_Gini25_NoClimPol_perc", "diff_Gini50_NoClimPol_perc"),
                names_to = "scenario",
                values_to = "annual_change") %>%
   mutate(scenario = gsub("diff_", "", scenario))  %>%
@@ -2298,9 +2373,9 @@ ggsave(paste0(here::here(), "/figures/GlobFoodSub_Base_SA.tiff"),last_plot(), "t
 
 # EMISSIONS
 em_base <- getQuery(prj_base, "CO2 emissions by region") %>%
-  mutate(scenario = if_else(grepl("Gini25", scenario), "Gini25", scenario),
-         scenario = if_else(grepl("Gini50", scenario), "Gini50", scenario),
-         scenario = if_else(grepl("Ref_SSP2", scenario), "Baseline", scenario)) %>%
+  mutate(scenario = if_else(grepl("Gini25", scenario), "Gini25_NoClimPol", scenario),
+         scenario = if_else(grepl("Gini50", scenario), "Gini50_NoClimPol", scenario),
+         scenario = if_else(grepl("Ref_SSP2", scenario), "Baseline_NoClimPol", scenario)) %>%
   filter(year <= 2050,
          year > 2015) %>%
   group_by(scenario, year, Units) %>%
