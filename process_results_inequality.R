@@ -180,8 +180,12 @@ gini_table_map <- shares %>%
   select(scenario = model, region, year, gini) %>%
   distinct() %>%
   arrange(scenario, region, year) %>%
+  filter(year > 2015) %>%
   bind_rows(
-    gini_table_base
+    gini_table_base %>%
+      select(-scenario) %>%
+      as_tibble() %>%
+      repeat_add_columns(tibble(scenario = c("Baseline", "Gini25", "Gini50")))
   ) %>%
   filter(year %in% c(2015, 2050)) %>%
   pivot_wider(names_from = "year",
@@ -259,8 +263,12 @@ gini_sce <- shares %>%
   select(scenario = model, region, year, gini) %>%
   distinct() %>%
   arrange(scenario, region, year) %>%
+  filter(year > 2015) %>%
   bind_rows(
-    gini_table_base
+    gini_table_base %>%
+      select(-scenario) %>%
+      as_tibble() %>%
+      repeat_add_columns(tibble(scenario = c("Baseline", "Gini25", "Gini50")))
   ) %>%
   filter(year %in% c(2015, 2050)) %>%
   pivot_wider(names_from = "year",
@@ -331,7 +339,11 @@ map_giniDiff_ssp <- rmap::map(
 
 map_giniDiff_SSP_fin <- map_giniDiff_ssp$map_param_PRETTY + 
   facet_wrap(~ssp, ncol = 2, drop = FALSE) + 
-  theme( legend.position = "bottom", legend.text = element_text(size = 10) ) +
+  theme(
+    legend.position = "bottom",
+    legend.text = element_text(size = 9),
+    strip.text = element_text(size = 9) # reduce strip text size
+  ) +
   guides(fill = guide_legend(nrow = 2, byrow = TRUE))
 
 ggsave(paste0(here::here(), "/figures/GiniDiff_2050.png"),map_giniDiff_SSP_fin, "png")
