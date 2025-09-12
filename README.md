@@ -2,12 +2,14 @@
 
 **Enhancing energy and food access through reduction of income inequality does not jeopardize the achievement of existing climate pledges**
 
-Jon Sampedro<sup>1\*</sup>, Dirk-Jan Van de Ven<sup>1</sup>, Russell Horowitz<sup>1</sup>, Clàudia Rodés-Bachs<sup>1</sup>, Iñaki Arto<sup>1</sup>, Maria Victoria Román<sup>1</sup>, Manuel Tomás<sup>1</sup>, 
-Kanishka Narayan<sup>2</sup>, Pralit Patel<sup>2</sup>, 
+Jon Sampedro<sup>1,\2\*</sup>, Dirk-Jan Van de Ven<sup>1</sup>, Russell Horowitz<sup>1</sup>, Clàudia Rodés-Bachs<sup>1</sup>, Iñaki Arto<sup>1</sup>, Maria Victoria Román<sup>1</sup>, Manuel Tomás<sup>1</sup>, 
+Kanishka Narayan<sup>3</sup>, Pralit Patel<sup>3</sup>, 
 
 <sup>1 </sup> Basque Center for Climate Change, Leioa, Spain
 
-<sup>2 </sup> Joint Global Change Research Institute, Pacific Northwest National Laboratory, College Park, United States of America
+<sup>2 </sup> IKERBASQUE, Basque Foundation for Science, Plaza Euskadi 5, 48009 Bilbao, Spain
+
+<sup>3 </sup> Joint Global Change Research Institute, Pacific Northwest National Laboratory, College Park, United States of America
 
 \* corresponding author:  jon.sampedro@bc3research.org
 
@@ -37,6 +39,4 @@ To reproduce the results and figures shown in Sampedro et al.,
 
 1. Install `R` here - https://www.r-project.org/
 2. Install `R studio` from here - https://www.rstudio.com/
-3. Run the script called `process_results_inequality.R` chunk by chunk to generate the figures.  
-
-TBC
+3. Run the script called `process_results_inequality.R` chunk by chunk to generate the figures.
