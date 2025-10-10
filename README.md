@@ -40,3 +40,7 @@ To reproduce the results and figures shown in Sampedro et al.,
 1. Install `R` here - https://www.r-project.org/
 2. Install `R studio` from here - https://www.rstudio.com/
 3. Run the script called `process_results_inequality.R` chunk by chunk to generate the figures.
+
+## Acknowledgments
+<img src="./graphics-logo.png" alt="GRAPHICS logo" width="80" height="54" align="left"/>
+This project has received funding from the European Union’s Horizon research program under grant agreement 101060679 (GRAPHICS project)
