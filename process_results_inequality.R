@@ -55,10 +55,11 @@ ggplot(ginis %>% filter(iso %in% selected_countries), aes(x = as.numeric(year), 
   theme(legend.position = "bottom",
         legend.title = element_blank(),
         strip.text = element_text(size = 10),
-        legend.text = element_text(size = 11),
+        legend.text = element_text(size = 12),
         axis.text.x = element_text(size = 10),
         axis.text.y = element_text(size = 10),
-        axis.title.y = element_text(size = 12)) + 
+        axis.title.y = element_text(size = 12),
+        panel.grid.minor = element_blank()) + 
   scale_color_manual(values = c("orange", "dodgerblue1", "forestgreen")) 
 
 
@@ -86,9 +87,10 @@ shares <- tibble::as_tibble(bind_rows(
 
 ggplot(shares %>%   
          filter(region %in% selected_gcam_regions, year == 2050) %>% 
-         mutate(region = gsub("_", " ", region)), 
-       aes(x = factor(category, levels = c("d1", "d2", "d3", "d4", "d5",
-                                           "d6", "d7", "d8", "d9", "d10")),
+         mutate(region = gsub("_", " ", region),
+                category = toupper(category)), 
+       aes(x = factor(category, levels = c("D1", "D2", "D3", "D4", "D5",
+                                           "D6", "D7", "D8", "D9", "D10")),
            y = shares, color = factor(model, levels = c("Baseline", "Gini25", "Gini50")))) +
   geom_point() + 
   facet_wrap(~region) + 
@@ -231,8 +233,9 @@ pov <- read.csv(paste0(here::here(), "/data/poverty.csv")) %>%
               value = pcGDP) %>%
   filter(year %in% c(2050),
          decile %in% c("d1","d5", "d10")) %>%
-  mutate(scenario = factor(scenario, levels = c("Baseline", "Gini25", "Gini50")),
-         decile_fin = factor(decile, levels = c("d1","d5", "d10")),
+  mutate(decile = toupper(decile),
+         scenario = factor(scenario, levels = c("Baseline", "Gini25", "Gini50")),
+         decile_fin = factor(decile, levels = c("D1","D5", "D10")),
          sce = scenario) %>%
   select(-decile, -scenario) %>%
   rename(decile = decile_fin)
@@ -254,7 +257,7 @@ map_pov_2050 <- map_povx$map_param_FIXED +
         strip.text.x = element_text(size = 11),
         plot.title = element_blank(),
         legend.position = "bottom",
-        legend.text = element_text(size = 8))
+        legend.text = element_text(size = 9))
 
 ggsave(paste0(here::here(), "/figures/Poverty_GCAMReg_2050.tiff"),last_plot(), "tiff")
 
@@ -496,19 +499,24 @@ ggplot(fen, aes(x = year, y = value,
             fontface = "bold") +
   facet_grid(~ scenario) + 
   theme_bw() +
-  labs(x = "", y = "EJ") + 
+  labs(x = "", y = "Exajoule") + 
   theme(legend.position = "bottom",
         legend.title = element_blank(),
         strip.text = element_text(size = 11),
         axis.text.x = element_text(size = 11),
         axis.text.y = element_text(size = 11),
-        axis.title.y = element_text(size = 12)) + 
+        axis.title.y = element_text(size = 12),
+        legend.text = element_text(size = 11),
+        panel.grid.minor = element_blank()) + 
   guides(fill = guide_legend(ncol = 3)) + 
-  scale_fill_manual(values = c("yellow2", 
-                               "salmon", "tomato3", "tomato",
-                               "violet",
-                               "yellowgreen","chartreuse2",
-                               "deepskyblue1", "deepskyblue3"))
+  geom_hline(yintercept = 0, linetype = 'dotted') +
+  scale_fill_manual(values = c(
+    "#FDE725", 
+    "#FC8D59","#E34A33","#B30000",
+    "#9E77FF", 
+    "#7AD151", "#238B45", 
+    "#56B1F7","#08306B"
+  ))
 
 
 ggsave(paste0(here::here(), "/figures/Fen_global_sce_sct.tiff"),last_plot(), "tiff")
@@ -522,19 +530,24 @@ ggplot(fen.abs, aes(x = scenario, y = value, fill = factor(sector, levels = c("C
   geom_col() +
   facet_grid( ~ year) + 
   theme_bw() +
-  labs(x = "", y = "EJ") + 
+  labs(x = "", y = "Exajoule") + 
   theme(legend.position = "bottom",
         legend.title = element_blank(),
         strip.text = element_text(size = 11),
         axis.text.x = element_text(size = 11),
         axis.text.y = element_text(size = 11),
-        axis.title.y = element_text(size = 12)) + 
+        axis.title.y = element_text(size = 12),
+        legend.text = element_text(size = 11),
+        panel.grid.minor = element_blank()) + 
+  geom_hline(yintercept = 0, linetype = 'dotted') +
   guides(fill = guide_legend(ncol = 3)) + 
-  scale_fill_manual(values = c("yellow2", 
-                               "salmon", "tomato3", "tomato",
-                               "violet",
-                               "yellowgreen","chartreuse2",
-                               "deepskyblue1", "deepskyblue3"))
+  scale_fill_manual(values = c(
+    "#FDE725", 
+    "#FC8D59","#E34A33","#B30000",
+    "#9E77FF", 
+    "#7AD151", "#238B45", 
+    "#56B1F7","#08306B"
+  ))
 
 ggsave(paste0(here::here(), "/figures/FenAbs_global_sce_sct.tiff"),last_plot(), "tiff")
 
@@ -670,22 +683,29 @@ fen.dec.tocheck <- bind_rows(fen.bld.dec, fen.trn.dec) %>%
   mutate(value_pc = value * conv_ej_gj / (pop * 0.1))
 
 
-ggplot(fen.dec %>% filter(year == 2050), aes(x = value, y = region, fill = factor(decile, levels = c("d1", "d2", "d3", "d4", "d5",
-                                                                          "d6", "d7", "d8", "d9", "d10")) )) +
+ggplot(fen.dec %>% 
+         filter(year == 2050) %>%
+         mutate(decile = toupper(decile)), 
+       aes(x = value, y = region, fill = factor(decile, levels = c("D1", "D2", "D3", "D4", "D5",
+                                                                          "D6", "D7", "D8", "D9", "D10")) )) +
   geom_col() +
+  geom_vline(xintercept = 0, linetype = 'dotted') +
   facet_grid(scenario ~ factor(sector, levels = c("Resid cooling",
                                        "Resid heating",
                                        "Resid non-thermal",
                                        "Passenger transport",
                                        "Int. Aviation (pass)"))) + 
   theme_bw() + 
-  labs(x = "", y = "EJ") + 
+  labs(x = "Exajoule", y = "") + 
   theme(legend.position = "bottom",
         legend.title = element_blank(),
-        strip.text = element_text(size = 7),
+        strip.text.x = element_text(size = 8),
+        strip.text.y = element_text(size = 10),
         axis.text.x = element_text(size = 8),
         axis.text.y = element_text(size = 8),
-        axis.title.y = element_text(size = 12)) + 
+        axis.title.y = element_text(size = 12),
+        legend.text = element_text(size = 10),
+        panel.grid.minor = element_blank()) + 
   scale_fill_manual(values = my_pal) +
   scale_y_discrete(limits = rev)
 
@@ -1042,14 +1062,16 @@ ggplot(glob.food.type.agg, aes(x = year, y = value, fill = food_group)) +
   
   facet_grid(factor(sector, levels = c("Staples", "Non-staples")) ~ scenario) + 
   theme_bw() +
-  labs(x = "", y = "Pcal") + 
+  labs(x = "", y = "Petacalorie ") + 
   theme(legend.position = "bottom",
         legend.title = element_blank(),
         legend.text = element_text(size = 8),
         strip.text = element_text(size = 11),
         axis.text.x = element_text(size = 11),
         axis.text.y = element_text(size = 11),
-        axis.title.y = element_text(size = 12)) + 
+        axis.title.y = element_text(size = 12),
+        panel.grid.minor = element_blank()) + 
+  geom_hline(yintercept = 0, linetype = 'dotted') +
   guides(fill = guide_legend(ncol = 2)) +  # Adjust columns as needed
   theme(legend.text = element_text(size = 8)) +
   scale_fill_manual(values = c(
@@ -1088,14 +1110,15 @@ ggplot(glob.food.type.abs, aes(x = scenario, y = value, fill = factor(subsector,
   geom_col() +
   facet_grid( ~ year) + 
   theme_bw() +
-  labs(x = "", y = "Pcal") + 
+  labs(x = "", y = "Petacalorie") + 
   theme(legend.position = "bottom",
         legend.title = element_blank(),
         legend.text = element_text(size = 8),
         strip.text = element_text(size = 11),
         axis.text.x = element_text(size = 11),
         axis.text.y = element_text(size = 11),
-        axis.title.y = element_text(size = 12)) + 
+        axis.title.y = element_text(size = 12),
+        panel.grid.minor = element_blank()) + 
   guides(fill = guide_legend(ncol = 7)) + 
   theme(legend.key.size = unit(0.4, "cm")) +
   scale_fill_manual(values = c("yellow1", "yellow2" , "yellow3", "gold2" ,
@@ -1325,19 +1348,25 @@ food_pc <- getQuery(prj, "food demand") %>%
          region = if_else(grepl("Trade", region), "EFTA", region))
 
 
-ggplot(food_pc %>% filter(year == 2050), aes(x = value, y = region, fill = demand )) +
+ggplot(food_pc %>% 
+         filter(year == 2050) %>%
+         mutate(decile = toupper(decile)),
+       aes(x = value, y = region, fill = demand )) +
   geom_col() +
-  facet_grid(scenario ~ factor(decile, levels = c("d1", "d2", "d3", "d4", "d5",
-                                                  "d6", "d7", "d8", "d9", "d10"))) + 
+  facet_grid(scenario ~ factor(decile, levels = c("D1", "D2", "D3", "D4", "D5",
+                                                  "D6", "D7", "D8", "D9", "D10"))) + 
   theme_bw() + 
-  labs(x = "", y = "kcal/pc/day") + 
+  labs(x = "", y = "kilocalorie/per capita/day") + 
+  geom_vline(xintercept = 0, linetype = 'dotted') + 
   theme(legend.position = "bottom",
         legend.title = element_blank(),
         strip.text = element_text(size = 10),
         axis.text.x = element_text(size = 5, angle = 90, hjust = 1, vjust = .5),
         axis.text.y = element_text(size = 8),
         axis.title.y = element_text(size = 12),
-        plot.title = element_text()) + 
+        plot.title = element_text(),
+        panel.grid.minor = element_blank(),
+        legend.text = element_text(size = 11)) + 
   scale_fill_manual(values = c("deepskyblue", "yellowgreen")) +
   scale_y_discrete(limits = rev)
 
@@ -1490,8 +1519,9 @@ adesa <- left_join(adesa_denominator, food_pc_withPop,
   dplyr::ungroup()
 
 ggplot(adesa %>% 
+         mutate(decile = toupper(decile)) %>%
          filter(year == 2050,
-                decile %in% c("d1", "d2", "d3")), 
+                decile %in% c("D1", "D2", "D3")), 
        aes(x = adesa, y = region, fill = scenario, color = scenario)) + 
 
   geom_bar(stat = "identity", position = "dodge") + 
@@ -1499,7 +1529,8 @@ ggplot(adesa %>%
   labs(x = "ADESA", y = "") + 
   theme_bw() + 
   theme(legend.position = "bottom",
-        legend.title = element_blank()) + 
+        legend.title = element_blank(),
+        panel.grid.minor = element_blank()) + 
   scale_fill_manual(values = c("orange", "dodgerblue1", "forestgreen")) +
   scale_color_manual(values = c("orange", "dodgerblue1", "forestgreen")) +
   geom_vline(xintercept = 100, color = "black", linetype = "dashed", size = 1) +
@@ -2249,7 +2280,7 @@ fen.rel.change_base <- bind_rows(fen.bld_base, fen.ind_base, fen.trn_base)  %>%
                values_to = "annual_change") %>%
   mutate(scenario = gsub("diff_", "", scenario))  %>%
   mutate(label = paste0(round(annual_change, 1), " %")) %>%
-  mutate(scenario = gsub("_perc", "", scenario))
+  mutate(scenario = gsub("_perc", "", scenario)) 
 
 
 # Ensure year is numeric
@@ -2267,13 +2298,15 @@ fen_base_with_pct <- fen_base_total %>%
 line_width <- 0.5  # in years
 
 # Add horizontal lines for net energy per year
-ggplot(fen_base, aes(x = year, y = value, 
+ggplot(fen_base %>%
+         mutate(scenario = gsub ("_NoClimPol", " (No Climate Policy)",scenario)),
+       aes(x = year, y = value, 
                 fill = factor(sector, levels = c("Commercial Buildings", 
                                                  "Residential cooling", "Residential heating", "Residential non-thermal services",
                                                  "Industry",
                                                  "Transport")))) +
   geom_col() +
-  geom_segment(data = fen_base_total, 
+  geom_segment(data = fen_base_total %>% mutate(scenario = gsub ("_NoClimPol", " (No Climate Policy)",scenario)), 
                aes(x = year - line_width / 2, 
                    xend = year + line_width / 2, 
                    y = total_value, 
@@ -2281,25 +2314,30 @@ ggplot(fen_base, aes(x = year, y = value,
                color = "black", 
                size = 1, 
                inherit.aes = FALSE) +
-  geom_text(data = fen_base_with_pct,
+  geom_text(data = fen_base_with_pct %>% mutate(scenario = gsub ("_NoClimPol", " (No Climate Policy)",scenario)),
             aes(x = year, y = total_value + 1, label = label),  # Adjust the y-position as needed
             inherit.aes = FALSE,
             size = 2.5,
             fontface = "bold") +
   facet_grid(~ scenario) + 
   theme_bw() +
-  labs(x = "", y = "EJ") + 
+  labs(x = "", y = "Exajoule") + 
+  geom_hline(yintercept = 0, linetype = 'dotted') +
   theme(legend.position = "bottom",
         legend.title = element_blank(),
         strip.text = element_text(size = 11),
         axis.text.x = element_text(size = 11),
         axis.text.y = element_text(size = 11),
-        axis.title.y = element_text(size = 12)) + 
+        axis.title.y = element_text(size = 12),
+        legend.text = element_text(size = 11),
+        panel.grid.minor = element_blank()) + 
   guides(fill = guide_legend(ncol = 3)) + 
-  scale_fill_manual(values = c("yellow2", 
-                               "salmon", "tomato3", "tomato",
-                               "violet",
-                               "deepskyblue1"))
+  scale_fill_manual(values = c(
+    "#FDE725", 
+    "#FC8D59","#E34A33","#B30000",
+    "#9E77FF", 
+    "#1F77B4"
+  ))
 
 
 ggsave(paste0(here::here(), "/figures/Fen_base_SA.tiff"),last_plot(), "tiff")
@@ -2334,17 +2372,22 @@ techs = c("a oil","a oil CCS","b natural gas","b natural gas CCS","c coal","c co
 
 my_pal_energy = jgcricolors::jgcricol()$pal_all
 
-ggplot(en_base %>% filter(year == 2050), aes(x = region, y = value, fill = fuel)) +
+ggplot(en_base %>% 
+         filter(year == 2050) %>%
+         mutate(scenario = gsub ("_NoClimPol", " (No Climate Policy)",scenario)), aes(x = region, y = value, fill = fuel)) +
   geom_col() +
   facet_grid( ~ scenario) + 
   theme_bw() + 
-  labs(x = "", y = "EJ") + 
+  labs(x = "", y = "Exajoule") +
+  geom_hline(yintercept = 0, linetype = 'dotted') +
   theme(legend.position = "right",
         legend.title = element_blank(),
         strip.text = element_text(size = 10),
         axis.text.x = element_text(size = 7, angle = 90, hjust = 1, vjust = .5),
         axis.text.y = element_text(size = 11),
-        axis.title.y = element_text(size = 12)) + 
+        axis.title.y = element_text(size = 12),
+        legend.text = element_text(size = 10),
+        panel.grid.minor = element_blank()) + 
   scale_fill_manual(values = my_pal_energy[names(my_pal_energy) %in% techs]) 
 
 ggsave(paste0(here::here(), "/figures/En_sce_fuel_2050_base.tiff"),last_plot(), "tiff")
@@ -2426,25 +2469,28 @@ food_with_pct_base$sector <- factor(food_with_pct_base$sector, levels = c("Stapl
 glob.food.type.sct_base$sector <- factor(glob.food.type.sct_base$sector, levels = c("Staples", "Non-staples"))
 
 
-ggplot(glob.food.type.sct_base, aes(x = year, y = value, fill = sector)) +
+ggplot(glob.food.type.sct_base %>%
+         mutate(scenario = gsub ("_NoClimPol", " (No Climate Policy)",scenario)),
+       aes(x = year, y = value, fill = sector)) +
   geom_col() +
   facet_grid(sector ~ scenario) + 
   theme_bw() +
   # Text labels (% change)
-  geom_text(data = food_with_pct_base,
+  geom_text(data = food_with_pct_base %>% mutate(scenario = gsub ("_NoClimPol", " (No Climate Policy)",scenario)),
             aes(x = year, y = total_value + 20, label = label,
                 group = interaction(sector, scenario)),
             inherit.aes = FALSE,
             size = 2.5,
             fontface = "bold") +
-  labs(x = "", y = "Pcal") + 
+  labs(x = "", y = "Petacalorie") + 
   theme(legend.position = "bottom",
         legend.title = element_blank(),
-        legend.text = element_text(size = 8),
+        legend.text = element_text(size = 10),
         strip.text = element_text(size = 11),
         axis.text.x = element_text(size = 11),
         axis.text.y = element_text(size = 11),
-        axis.title.y = element_text(size = 12)) + 
+        axis.title.y = element_text(size = 12),
+        panel.grid.minor = element_blank()) + 
   guides(fill = guide_legend(ncol = 2)) +  # Adjust columns as needed
   theme(legend.text = element_text(size = 8)) +
   scale_fill_manual(values = c(
