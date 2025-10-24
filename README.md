@@ -1,4 +1,4 @@
-## Sampedro_etal_Ineq_NDC-LTT
+## Sampedro_etal_ERL
 
 **Enhancing energy and food access through reduction of income inequality does not jeopardize the achievement of existing climate pledges**
 
@@ -17,10 +17,9 @@ Kanishka Narayan<sup>3</sup>, Pralit Patel<sup>3</sup>,
 Reducing within-region income inequality is a global priority that must be urgently addressed to promote human development and enhance global access to energy and food. This could lead to higher energy-related emissions by lower-income consumers, potentially creating some conflicts with climate change mitigation objectives. Using an enhanced version of the Global Change Analysis Model, we simulate reductions of within-region income inequality that allow for narrowing differences in energy and food demand across deciles by 2050 in a Paris-compliant world. The energy demand increase by lower-income consumers is greater than the decline in demand by wealthier and more satiated income groups, leading to an overall rise in total demand. Nevertheless, the projected higher energy demand in the proposed more egalitarian societies only slightly increases the regional carbon prices and mitigation costs associated with the emission targets, therefore posing minimal impact on the achievement of the existing portfolio of climate pledges.      
 
 ## Code reference
-Available at Zenodo: ADD Zenodo Link
+The GCAM_GRAPHICS model used in this study is available at Zenodo: https://zenodo.org/records/16960260
 
-ADD Code Citation
-
+jonsampedro. (2025). GCAM-GRAPHICS-7.0.0 (GCAM-GRAPHICS-v7.0.0). Zenodo. https://doi.org/10.5281/zenodo.16960260
 
 ## Contributing modeling software
 | Model | Version | Repository Link 
