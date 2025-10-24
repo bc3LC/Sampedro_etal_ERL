@@ -2,7 +2,7 @@
 
 **Enhancing energy and food access through reduction of income inequality does not jeopardize the achievement of existing climate pledges**
 
-Jon Sampedro<sup>1,\2\*</sup>, Dirk-Jan Van de Ven<sup>1</sup>, Russell Horowitz<sup>1</sup>, Clàudia Rodés-Bachs<sup>1</sup>, Iñaki Arto<sup>1</sup>, Maria Victoria Román<sup>1</sup>, Manuel Tomás<sup>1</sup>, 
+Jon Sampedro<sup>1,2\*</sup>, Dirk-Jan Van de Ven<sup>1</sup>, Russell Horowitz<sup>1</sup>, Clàudia Rodés-Bachs<sup>1</sup>, Iñaki Arto<sup>1</sup>, Maria Victoria Román<sup>1</sup>, Manuel Tomás<sup>1</sup>, 
 Kanishka Narayan<sup>3</sup>, Pralit Patel<sup>3</sup>, 
 
 <sup>1 </sup> Basque Center for Climate Change, Leioa, Spain
