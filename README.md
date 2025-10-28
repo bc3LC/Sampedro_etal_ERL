@@ -42,7 +42,7 @@ To reproduce the results and figures shown in Sampedro et al.,
 
 ## Acknowledgments
 <div align="center">
-  <img src="./graphics-logo.png" alt="GRAPHICS logo" width="120" height="150"/>
+  <img src="./graphics-logo.png" alt="GRAPHICS logo" width="200" height="250"/>
 </div>
 
 This project has received funding from the European Union's Horizon research program under grant agreement 101060679 (GRAPHICS project).
