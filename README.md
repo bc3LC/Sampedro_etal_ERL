@@ -41,5 +41,7 @@ To reproduce the results and figures shown in Sampedro et al.,
 3. Run the script called `process_results_inequality.R` chunk by chunk to generate the figures.
 
 ## Acknowledgments
-<img src="./graphics-logo.png" alt="GRAPHICS logo" width="120" height="150" align="left"/>
+<p align="center">
+  <img src="https://github.com/user-attachments/assets/6a5f5b7c-4f8c-4f5e-8f5a-0b4e7e7d2c0d" alt="acknowledgements" width="600">
+</p>
 This project has received funding from the European Union’s Horizon research program under grant agreement 101060679 (GRAPHICS project)
